@@ -7,6 +7,7 @@ import { FishingSystem } from './fishing.js';
 import { DayNightCycle } from './daynight.js';
 import { UIManager } from './ui.js';
 import { MissionManager } from './missions.js';
+import { Workbench } from './workbench.js';
 
 export const GameState = {
     MENU: 'menu',
@@ -33,6 +34,7 @@ export class Game {
         this.dayNight = null;
         this.missions = null;
         this.ui = null;
+        this.activeWorkbench = null;
         
         // 输入状态
         this.keys = {};
@@ -40,6 +42,7 @@ export class Game {
         
         // 建造模式
         this.buildMode = false;
+        this.placingWorkbench = false;
         
         this.setupInput();
     }
@@ -51,8 +54,44 @@ export class Game {
             // 按B进入/退出建造模式
             if (e.key.toLowerCase() === 'b') {
                 this.buildMode = !this.buildMode;
+                this.placingWorkbench = false;
                 if (this.ui) {
-                    this.ui.addNotification(this.buildMode ? '🔨 建造模式开启' : '🔨 建造模式关闭');
+                    this.ui.addNotification(this.buildMode ? '🔨 建造模式开启 (按W放置工作台)' : '🔨 建造模式关闭');
+                }
+            }
+            
+            // 建造模式下按W放置工作台
+            if (this.buildMode && e.key.toLowerCase() === 'w') {
+                this.placingWorkbench = !this.placingWorkbench;
+                if (this.placingWorkbench) {
+                    this.ui.addNotification('🔨 点击放置工作台 (需要: 木板x10 + 金属x2)');
+                }
+            }
+            
+            // 按E打开/关闭工作台
+            if (e.key.toLowerCase() === 'e') {
+                if (this.activeWorkbench) {
+                    this.activeWorkbench.isOpen = !this.activeWorkbench.isOpen;
+                    if (!this.activeWorkbench.isOpen) {
+                        this.activeWorkbench = null;
+                    }
+                } else {
+                    // 检查附近的工作台
+                    for (const workbench of this.raft.getWorkbenches()) {
+                        if (workbench.isPlayerNear(this.player)) {
+                            this.activeWorkbench = workbench;
+                            this.activeWorkbench.isOpen = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // ESC关闭工作台
+            if (e.key === 'Escape') {
+                if (this.activeWorkbench) {
+                    this.activeWorkbench.isOpen = false;
+                    this.activeWorkbench = null;
                 }
             }
         });
@@ -70,8 +109,37 @@ export class Game {
         this.canvas.addEventListener('click', (e) => {
             this.mouse.clicked = true;
             
+            // 工作台UI点击
+            if (this.activeWorkbench && this.activeWorkbench.isOpen) {
+                const result = this.activeWorkbench.handleClick(
+                    this.mouse.x, this.mouse.y, this.player.inventory
+                );
+                if (result) {
+                    if (result.type === 'special') {
+                        this.ui.addNotification(`🎉 合成成功: ${result.name}!`);
+                    } else {
+                        this.ui.addNotification(`✅ 合成成功!`);
+                    }
+                }
+                return;
+            }
+            
             // 建造模式下点击扩建
             if (this.buildMode && this.itemManager && this.player) {
+                if (this.placingWorkbench) {
+                    // 放置工作台
+                    if (this.player.inventory.plank >= 10 && this.player.inventory.metal >= 2) {
+                        this.player.removeFromInventory('plank', 10);
+                        this.player.removeFromInventory('metal', 2);
+                        this.raft.addWorkbench(this.mouse.x - 20, this.mouse.y - 20);
+                        this.ui.addNotification('✅ 工作台放置成功!');
+                        this.placingWorkbench = false;
+                    } else {
+                        this.ui.addNotification('❌ 材料不足! 需要: 木板x10 + 金属x2');
+                    }
+                    return;
+                }
+                
                 const hasPlank = this.player.inventory.plank > 0;
                 if (!hasPlank) {
                     this.ui.addNotification('❌ 木板不足!');
@@ -130,7 +198,11 @@ export class Game {
     update() {
         if (this.state !== GameState.PLAYING) return;
         
-        this.player.update(this.deltaTime, this.keys);
+        // 只有在工作台未打开时才更新玩家
+        if (!this.activeWorkbench || !this.activeWorkbench.isOpen) {
+            this.player.update(this.deltaTime, this.keys);
+        }
+        
         this.itemManager.update(this.deltaTime, this.canvas.width, this.canvas.height, this.player);
         this.fishing.update(this.deltaTime, this.keys, this.player, this.canvas.width, this.canvas.height);
         this.dayNight.update(this.deltaTime);
@@ -173,6 +245,29 @@ export class Game {
         this.itemManager.render(this.ctx);
         this.fishing.render(this.ctx, this.player);
         this.player.render(this.ctx);
+        
+        // 绘制工作台放置提示
+        if (this.placingWorkbench) {
+            this.ctx.fillStyle = 'rgba(46, 204, 113, 0.5)';
+            this.ctx.fillRect(this.mouse.x - 20, this.mouse.y - 20, 40, 40);
+            this.ctx.strokeStyle = '#2ecc71';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(this.mouse.x - 20, this.mouse.y - 20, 40, 40);
+            this.ctx.fillStyle = '#fff';
+            this.ctx.font = '20px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('🔨', this.mouse.x, this.mouse.y + 7);
+        }
+        
+        // 绘制工作台UI
+        if (this.activeWorkbench && this.activeWorkbench.isOpen) {
+            this.activeWorkbench.renderUI(
+                this.ctx, 
+                this.player.inventory, 
+                this.canvas.width, 
+                this.canvas.height
+            );
+        }
         
         this.ui.render(this.ctx, this.player, this.dayNight, this.canvas.width, this.canvas.height);
     }

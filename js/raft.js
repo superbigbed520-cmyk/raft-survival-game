@@ -1,5 +1,6 @@
 // 木筏系统模块（侧视角）
 import { CELL_SIZE } from './utils.js';
+import { Workbench } from './workbench.js';
 
 export const CellType = {
     PLANK: 'plank',
@@ -14,6 +15,9 @@ export class Raft {
         this.platforms = [];
         this.width = 5; // 格子数
         this.height = 1;
+        
+        // 工作台
+        this.workbenches = [];
         
         // 初始化平台（底部一排）
         const startX = 800 / 2 - (this.width * CELL_SIZE) / 2;
@@ -89,6 +93,17 @@ export class Raft {
         return true;
     }
     
+    addWorkbench(x, y) {
+        // 在指定位置添加工作台
+        const workbench = new Workbench(x, y);
+        this.workbenches.push(workbench);
+        return workbench;
+    }
+    
+    getWorkbenches() {
+        return this.workbenches;
+    }
+    
     getExpandablePositions(playerX, playerY) {
         const positions = [];
         
@@ -158,6 +173,11 @@ export class Raft {
                 ctx.fillStyle = '#4682B4';
                 ctx.fillRect(platform.x + 5, platform.y + 5, platform.width - 10, platform.height - 10);
             }
+        }
+        
+        // 绘制工作台
+        for (const workbench of this.workbenches) {
+            workbench.render(ctx);
         }
         
         // 绘制扩建提示
