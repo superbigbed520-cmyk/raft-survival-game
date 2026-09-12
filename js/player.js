@@ -33,6 +33,16 @@ export class Player {
         this.animFrame = 0;
         this.animTimer = 0;
         
+        // 移动状态
+        this.isMoving = false;
+        this.moveProgress = 0;
+        this.startX = 0;
+        this.startY = 0;
+        this.targetX = 0;
+        this.targetY = 0;
+        this.targetGridX = 0;
+        this.targetGridY = 0;
+        
         this.updatePixelPosition();
     }
     
@@ -42,42 +52,58 @@ export class Player {
     }
     
     update(deltaTime, keys) {
-        // 移动
-        let dx = 0;
-        let dy = 0;
+        // 格子移动（每次移动一格）
+        if (!this.isMoving) {
+            let dx = 0;
+            let dy = 0;
+            
+            if (keys['w'] || keys['arrowup']) {
+                dy = -1;
+                this.facing = 'up';
+            } else if (keys['s'] || keys['arrowdown']) {
+                dy = 1;
+                this.facing = 'down';
+            } else if (keys['a'] || keys['arrowleft']) {
+                dx = -1;
+                this.facing = 'left';
+            } else if (keys['d'] || keys['arrowright']) {
+                dx = 1;
+                this.facing = 'right';
+            }
+            
+            if (dx !== 0 || dy !== 0) {
+                const newGridX = this.gridX + dx;
+                const newGridY = this.gridY + dy;
+                
+                if (this.raft.hasCell(newGridX, newGridY)) {
+                    this.targetGridX = newGridX;
+                    this.targetGridY = newGridY;
+                    this.isMoving = true;
+                    this.moveProgress = 0;
+                    this.startX = this.x;
+                    this.startY = this.y;
+                    this.targetX = this.raft.offsetX + newGridX * CELL_SIZE + CELL_SIZE / 2;
+                    this.targetY = this.raft.offsetY + newGridY * CELL_SIZE + CELL_SIZE / 2;
+                }
+            }
+        }
         
-        if (keys['w'] || keys['arrowup']) {
-            dy = -1;
-            this.facing = 'up';
-        }
-        if (keys['s'] || keys['arrowdown']) {
-            dy = 1;
-            this.facing = 'down';
-        }
-        if (keys['a'] || keys['arrowleft']) {
-            dx = -1;
-            this.facing = 'left';
-        }
-        if (keys['d'] || keys['arrowright']) {
-            dx = 1;
-            this.facing = 'right';
-        }
-        
-        // 归一化对角线移动
-        if (dx !== 0 && dy !== 0) {
-            dx *= 0.707;
-            dy *= 0.707;
-        }
-        
-        // 计算目标网格位置
-        const newGridX = this.gridX + Math.round(dx);
-        const newGridY = this.gridY + Math.round(dy);
-        
-        // 检查是否可以移动到目标位置
-        if (this.raft.hasCell(newGridX, newGridY)) {
-            this.gridX = newGridX;
-            this.gridY = newGridY;
-            this.updatePixelPosition();
+        // 移动动画
+        if (this.isMoving) {
+            this.moveProgress += deltaTime * 10; // 移动速度
+            
+            if (this.moveProgress >= 1) {
+                this.moveProgress = 1;
+                this.gridX = this.targetGridX;
+                this.gridY = this.targetGridY;
+                this.x = this.targetX;
+                this.y = this.targetY;
+                this.isMoving = false;
+            } else {
+                // 线性插值
+                this.x = this.startX + (this.targetX - this.startX) * this.moveProgress;
+                this.y = this.startY + (this.targetY - this.startY) * this.moveProgress;
+            }
         }
         
         // 更新饥饿和口渴（降低消耗速度）
