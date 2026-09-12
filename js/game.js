@@ -4,6 +4,7 @@ import { Player } from './player.js';
 import { Raft } from './raft.js';
 import { ItemManager } from './items.js';
 import { FishingSystem } from './fishing.js';
+import { DayNightCycle } from './daynight.js';
 
 export const GameState = {
     MENU: 'menu',
@@ -41,6 +42,7 @@ export class Game {
         
         this.itemManager = null;
         this.fishing = null;
+        this.dayNight = null;
         
         this.setupInput();
     }
@@ -73,6 +75,7 @@ export class Game {
         this.player = new Player(this.raft);
         this.itemManager = new ItemManager();
         this.fishing = new FishingSystem();
+        this.dayNight = new DayNightCycle();
         this.state = GameState.PLAYING;
         this.lastTime = performance.now();
         this.gameLoop();
@@ -96,6 +99,7 @@ export class Game {
         this.player.update(this.deltaTime, this.keys);
         this.itemManager.update(this.deltaTime, this.canvas.width, this.canvas.height, this.player);
         this.fishing.update(this.deltaTime, this.keys, this.player, this.canvas.width, this.canvas.height);
+        this.dayNight.update(this.deltaTime);
         
         // 处理钓鱼收获
         const catchResult = this.fishing.getCatch();
@@ -110,9 +114,7 @@ export class Game {
     }
     
     render() {
-        // 清空画布
-        this.ctx.fillStyle = '#4a90a4';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.dayNight.render(this.ctx, this.canvas.width, this.canvas.height);
         
         this.raft.render(this.ctx);
         this.itemManager.render(this.ctx);
