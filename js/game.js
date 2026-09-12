@@ -52,6 +52,14 @@ export class Game {
     setupInput() {
         window.addEventListener('keydown', (e) => {
             this.keys[e.key.toLowerCase()] = true;
+            
+            // 按B进入/退出建造模式
+            if (e.key.toLowerCase() === 'b') {
+                this.buildMode = !this.buildMode;
+                if (this.ui) {
+                    this.ui.addNotification(this.buildMode ? '🔨 建造模式开启' : '🔨 建造模式关闭');
+                }
+            }
         });
         
         window.addEventListener('keyup', (e) => {
@@ -66,7 +74,34 @@ export class Game {
         
         this.canvas.addEventListener('click', (e) => {
             this.mouse.clicked = true;
-            if (this.itemManager) {
+            
+            // 建造模式下点击扩建
+            if (this.buildMode && this.itemManager && this.player) {
+                const hasPlank = this.player.inventory.plank > 0;
+                if (!hasPlank) {
+                    this.ui.addNotification('❌ 木板不足!');
+                    return;
+                }
+                
+                const expandable = this.raft.getExpandableCells(
+                    this.player.x, this.player.y,
+                    this.raft.offsetX, this.raft.offsetY
+                );
+                
+                for (const cell of expandable) {
+                    const dist = Math.sqrt(
+                        (this.mouse.x - cell.px) ** 2 + 
+                        (this.mouse.y - cell.py) ** 2
+                    );
+                    if (dist < CELL_SIZE / 2) {
+                        if (this.raft.expand(cell.x, cell.y)) {
+                            this.player.removeFromInventory('plank');
+                            this.ui.addNotification('✅ 木筏扩建成功!');
+                        }
+                        break;
+                    }
+                }
+            } else if (this.itemManager) {
                 this.itemManager.checkClick(this.mouse.x, this.mouse.y);
             }
         });
@@ -123,6 +158,25 @@ export class Game {
         this.dayNight.render(this.ctx, this.canvas.width, this.canvas.height);
         
         this.raft.render(this.ctx);
+        
+        // 建造模式下显示可扩建位置
+        if (this.buildMode && this.player) {
+            const expandable = this.raft.getExpandableCells(
+                this.player.x, this.player.y,
+                this.raft.offsetX, this.raft.offsetY
+            );
+            
+            this.ctx.save();
+            expandable.forEach(cell => {
+                this.ctx.fillStyle = 'rgba(46, 204, 113, 0.5)';
+                this.ctx.fillRect(cell.px - CELL_SIZE / 2, cell.py - CELL_SIZE / 2, CELL_SIZE, CELL_SIZE);
+                this.ctx.strokeStyle = '#2ecc71';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(cell.px - CELL_SIZE / 2, cell.py - CELL_SIZE / 2, CELL_SIZE, CELL_SIZE);
+            });
+            this.ctx.restore();
+        }
+        
         this.itemManager.render(this.ctx);
         this.fishing.render(this.ctx, this.player);
         this.player.render(this.ctx);
