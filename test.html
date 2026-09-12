@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试</title>
+</head>
+<body>
+    <h1>游戏测试</h1>
+    <canvas id="test-canvas" width="400" height="300" style="border:1px solid black;"></canvas>
+    <div id="log"></div>
+    <script>
+        const log = document.getElementById('log');
+        const canvas = document.getElementById('test-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        log.innerHTML += '<p>Canvas创建成功</p>';
+        
+        // 测试基本绘制
+        ctx.fillStyle = 'red';
+        ctx.fillRect(10, 10, 100, 100);
+        log.innerHTML += '<p>绘制红色方块成功</p>';
+        
+        // 测试模块加载
+        try {
+            const script = document.createElement('script');
+            script.type = 'module';
+            script.textContent = `
+                import { Game } from './js/main.js';
+                log.innerHTML += '<p>模块加载成功</p>';
+            `;
+            document.body.appendChild(script);
+        } catch (e) {
+            log.innerHTML += '<p>模块加载错误: ' + e.message + '</p>';
+        }
+        
+        log.innerHTML += '<p>测试完成</p>';
+    </script>
+</body>
+</html>

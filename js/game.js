@@ -25,14 +25,13 @@ export class Game {
         this.lastTime = 0;
         this.deltaTime = 0;
         
-        // 游戏对象（后续任务初始化）
+        // 游戏对象
         this.player = null;
         this.raft = null;
-        this.items = [];
+        this.itemManager = null;
         this.fishing = null;
         this.dayNight = null;
         this.missions = null;
-        this.world = null;
         this.ui = null;
         
         // 输入状态
@@ -41,12 +40,6 @@ export class Game {
         
         // 建造模式
         this.buildMode = false;
-        
-        this.itemManager = null;
-        this.fishing = null;
-        this.dayNight = null;
-        this.ui = null;
-        this.missions = null;
         
         this.setupInput();
     }

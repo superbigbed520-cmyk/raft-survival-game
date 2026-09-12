@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>调试页面</title>
+    <style>
+        body { font-family: monospace; background: #222; color: #0f0; padding: 20px; }
+        #log { white-space: pre-wrap; }
+        canvas { border: 2px solid #0f0; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🎮 木筏生存 - 调试页面</h1>
+    <canvas id="game-canvas" width="800" height="600"></canvas>
+    <div id="log">正在加载...</div>
+    
+    <script type="module">
+        const logDiv = document.getElementById('log');
+        const canvas = document.getElementById('game-canvas');
+        
+        function log(msg) {
+            logDiv.innerHTML += '\n' + msg;
+            console.log(msg);
+        }
+        
+        log('✅ Canvas元素获取成功');
+        log('Canvas尺寸: ' + canvas.width + 'x' + canvas.height);
+        
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            log('✅ Canvas上下文获取成功');
+        } else {
+            log('❌ Canvas上下文获取失败');
+        }
+        
+        // 绘制测试
+        ctx.fillStyle = '#4a90a4';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        log('✅ 绘制背景成功');
+        
+        // 绘制测试方块
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(350, 250, 100, 100);
+        log('✅ 绘制木筏方块成功');
+        
+        // 绘制测试文字
+        ctx.fillStyle = '#fff';
+        ctx.font = '24px Arial';
+        ctx.fillText('🎮 游戏加载中...', 280, 200);
+        log('✅ 绘制文字成功');
+        
+        // 尝试加载游戏模块
+        log('📦 正在加载游戏模块...');
+        
+        try {
+            const { Game } = await import('./js/game.js');
+            log('✅ Game模块加载成功');
+            
+            const game = new Game(canvas);
+            log('✅ Game实例创建成功');
+            
+            game.start();
+            log('✅ 游戏启动成功');
+            
+        } catch (error) {
+            log('❌ 加载错误: ' + error.message);
+            log('错误堆栈: ' + error.stack);
+        }
+        
+        log('\n🎮 调试完成');
+    </script>
+</body>
+</html>
