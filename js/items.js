@@ -184,33 +184,19 @@ export class ItemManager {
             ? types[randomInt(0, 3)]  // 80%普通
             : types[randomInt(4, 5)]; // 20%稀有
         
-        // 随机位置（从左右两侧或上方飘入）
-        const side = randomInt(0, 2);
-        let x, y;
+        // 从海面漂来（420是水面位置）
+        const waterLevel = 425;
+        const fromLeft = Math.random() > 0.5;
         
-        switch (side) {
-            case 0: // 从左侧飘入
-                x = -30;
-                y = randomRange(100, 380);
-                break;
-            case 1: // 从右侧飘入
-                x = canvasWidth + 30;
-                y = randomRange(100, 380);
-                break;
-            case 2: // 从上方飘落
-                x = randomRange(50, canvasWidth - 50);
-                y = -30;
-                break;
-        }
+        const x = fromLeft ? -30 : canvasWidth + 30;
+        const y = waterLevel + randomRange(-10, 20); // 在水面附近漂浮
         
         const item = new FloatingItem(type, x, y);
         
-        // 朝向画布中心漂移
-        const centerX = canvasWidth / 2;
-        const centerY = 350; // 木筏位置附近
-        const angle = Math.atan2(centerY - y, centerX - x);
-        item.vx = Math.cos(angle) * randomRange(30, 70);
-        item.vy = Math.sin(angle) * randomRange(20, 50) + 20; // 添加向下速度
+        // 海流方向（从左到右或从右到左）
+        const direction = fromLeft ? 1 : -1;
+        item.vx = direction * randomRange(30, 60);
+        item.vy = 0; // 水平漂浮
         
         this.items.push(item);
     }
