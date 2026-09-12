@@ -1,23 +1,31 @@
-// 玩家系统模块
+// 玩家系统模块（侧视角）
 import { CELL_SIZE, clamp } from './utils.js';
 
 export class Player {
     constructor(raft) {
         this.raft = raft;
         
-        // 木筏网格位置
-        this.gridX = 1;
-        this.gridY = 1;
+        // 位置
+        this.x = 400; // 像素位置
+        this.y = 300;
+        this.width = 24;
+        this.height = 32;
         
-        // 像素位置（相对于画布）
-        this.x = 0;
-        this.y = 0;
+        // 速度
+        this.vx = 0;
+        this.vy = 0;
+        this.speed = 200; // 水平速度
+        this.jumpForce = -350; // 跳跃力度
+        this.gravity = 800; // 重力
+        
+        // 状态
+        this.isGrounded = false;
+        this.isJumping = false;
         
         // 属性
         this.hunger = 100;
         this.thirst = 100;
         this.health = 100;
-        this.speed = 150; // 像素/秒
         
         // 背包
         this.inventory = {
@@ -29,95 +37,74 @@ export class Player {
         };
         
         // 动画
-        this.facing = 'down'; // up, down, left, right
+        this.facing = 'right'; // left, right
         this.animFrame = 0;
         this.animTimer = 0;
-        
-        // 移动状态
-        this.isMoving = false;
-        this.moveProgress = 0;
-        this.startX = 0;
-        this.startY = 0;
-        this.targetX = 0;
-        this.targetY = 0;
-        this.targetGridX = 0;
-        this.targetGridY = 0;
-        
-        this.updatePixelPosition();
-    }
-    
-    updatePixelPosition() {
-        this.x = this.raft.offsetX + this.gridX * CELL_SIZE + CELL_SIZE / 2;
-        this.y = this.raft.offsetY + this.gridY * CELL_SIZE + CELL_SIZE / 2;
     }
     
     update(deltaTime, keys) {
-        // 格子移动（每次移动一格）
-        if (!this.isMoving) {
-            let dx = 0;
-            let dy = 0;
-            
-            if (keys['w'] || keys['arrowup']) {
-                dy = -1;
-                this.facing = 'up';
-            } else if (keys['s'] || keys['arrowdown']) {
-                dy = 1;
-                this.facing = 'down';
-            } else if (keys['a'] || keys['arrowleft']) {
-                dx = -1;
-                this.facing = 'left';
-            } else if (keys['d'] || keys['arrowright']) {
-                dx = 1;
-                this.facing = 'right';
-            }
-            
-            if (dx !== 0 || dy !== 0) {
-                const newGridX = this.gridX + dx;
-                const newGridY = this.gridY + dy;
+        // 水平移动
+        this.vx = 0;
+        if (keys['a'] || keys['arrowleft']) {
+            this.vx = -this.speed;
+            this.facing = 'left';
+        }
+        if (keys['d'] || keys['arrowright']) {
+            this.vx = this.speed;
+            this.facing = 'right';
+        }
+        
+        // 跳跃
+        if ((keys['w'] || keys['arrowup'] || keys[' ']) && this.isGrounded) {
+            this.vy = this.jumpForce;
+            this.isGrounded = false;
+            this.isJumping = true;
+        }
+        
+        // 应用重力
+        if (!this.isGrounded) {
+            this.vy += this.gravity * deltaTime;
+        }
+        
+        // 更新位置
+        this.x += this.vx * deltaTime;
+        this.y += this.vy * deltaTime;
+        
+        // 碰撞检测（与木筏平台）
+        this.isGrounded = false;
+        const platforms = this.raft.getPlatforms();
+        
+        for (const platform of platforms) {
+            // 检查是否站在平台上
+            if (this.x + this.width > platform.x && 
+                this.x < platform.x + platform.width &&
+                this.y + this.height >= platform.y &&
+                this.y + this.height <= platform.y + 20 &&
+                this.vy >= 0) {
                 
-                if (this.raft.hasCell(newGridX, newGridY)) {
-                    this.targetGridX = newGridX;
-                    this.targetGridY = newGridY;
-                    this.isMoving = true;
-                    this.moveProgress = 0;
-                    this.startX = this.x;
-                    this.startY = this.y;
-                    this.targetX = this.raft.offsetX + newGridX * CELL_SIZE + CELL_SIZE / 2;
-                    this.targetY = this.raft.offsetY + newGridY * CELL_SIZE + CELL_SIZE / 2;
-                }
+                this.y = platform.y - this.height;
+                this.vy = 0;
+                this.isGrounded = true;
+                this.isJumping = false;
             }
         }
         
-        // 移动动画
-        if (this.isMoving) {
-            this.moveProgress += deltaTime * 10; // 移动速度
-            
-            if (this.moveProgress >= 1) {
-                this.moveProgress = 1;
-                this.gridX = this.targetGridX;
-                this.gridY = this.targetGridY;
-                this.x = this.targetX;
-                this.y = this.targetY;
-                this.isMoving = false;
-            } else {
-                // 线性插值
-                this.x = this.startX + (this.targetX - this.startX) * this.moveProgress;
-                this.y = this.startY + (this.targetY - this.startY) * this.moveProgress;
-            }
-        }
+        // 边界限制
+        this.x = clamp(this.x, 0, 800 - this.width);
+        this.y = clamp(this.y, 0, 600);
         
-        // 更新饥饿和口渴（降低消耗速度）
-        this.hunger = clamp(this.hunger - deltaTime * 0.5, 0, 100);
-        this.thirst = clamp(this.thirst - deltaTime * 0.7, 0, 100);
+        // 更新饥饿和口渴
+        this.hunger = clamp(this.hunger - deltaTime * 0.3, 0, 100);
+        this.thirst = clamp(this.thirst - deltaTime * 0.4, 0, 100);
         
-        // 饥饿或口渴为0时掉血（降低掉血速度）
+        // 饥饿或口渴为0时掉血
         if (this.hunger === 0 || this.thirst === 0) {
-            this.health = clamp(this.health - deltaTime * 3, 0, 100);
+            this.health = clamp(this.health - deltaTime * 2, 0, 100);
         }
         
         // 动画计时
         this.animTimer += deltaTime;
-        if (this.animTimer > 0.2) {
+        if (this.animTimer > 0.15) {
             this.animTimer = 0;
             this.animFrame = (this.animFrame + 1) % 4;
         }
@@ -140,35 +127,48 @@ export class Player {
     }
     
     render(ctx) {
-        // 绘制玩家（简单的圆形角色）
         ctx.save();
+        
+        // 翻转方向
+        if (this.facing === 'left') {
+            ctx.translate(this.x + this.width, this.y);
+            ctx.scale(-1, 1);
+        } else {
+            ctx.translate(this.x, this.y);
+        }
         
         // 身体
         ctx.fillStyle = '#e74c3c';
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, 12, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(4, 8, 16, 18);
         
-        // 眼睛（根据朝向）
+        // 头
+        ctx.fillStyle = '#f5cba7';
+        ctx.fillRect(6, 0, 12, 12);
+        
+        // 眼睛
         ctx.fillStyle = '#fff';
-        const eyeOffset = { x: 0, y: 0 };
-        switch (this.facing) {
-            case 'up': eyeOffset.y = -4; break;
-            case 'down': eyeOffset.y = 4; break;
-            case 'left': eyeOffset.x = -4; break;
-            case 'right': eyeOffset.x = 4; break;
-        }
-        ctx.beginPath();
-        ctx.arc(this.x + eyeOffset.x - 3, this.y + eyeOffset.y - 2, 3, 0, Math.PI * 2);
-        ctx.arc(this.x + eyeOffset.x + 3, this.y + eyeOffset.y - 2, 3, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // 瞳孔
+        ctx.fillRect(14, 3, 5, 5);
         ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.arc(this.x + eyeOffset.x - 3, this.y + eyeOffset.y - 2, 1.5, 0, Math.PI * 2);
-        ctx.arc(this.x + eyeOffset.x + 3, this.y + eyeOffset.y - 2, 1.5, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(16, 4, 2, 3);
+        
+        // 腿
+        const legOffset = this.isGrounded ? Math.sin(this.animFrame * Math.PI / 2) * 3 : 2;
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillRect(6, 26, 5, 6 + legOffset);
+        ctx.fillRect(13, 26, 5, 6 - legOffset);
+        
+        // 手臂
+        ctx.fillStyle = '#f5cba7';
+        if (!this.isGrounded) {
+            ctx.fillRect(0, 12, 6, 4);
+            ctx.fillRect(18, 12, 6, 4);
+        } else if (this.vx !== 0) {
+            ctx.fillRect(0, 12 + Math.sin(this.animTimer * 10) * 3, 6, 4);
+            ctx.fillRect(18, 12 - Math.sin(this.animTimer * 10) * 3, 6, 4);
+        } else {
+            ctx.fillRect(0, 12, 6, 4);
+            ctx.fillRect(18, 12, 6, 4);
+        }
         
         ctx.restore();
     }

@@ -1,5 +1,5 @@
-// 钓鱼系统模块
-import { randomRange, distance } from './utils.js';
+// 钓鱼系统模块（侧视角）
+import { randomRange } from './utils.js';
 
 export const FishingState = {
     IDLE: 'idle',
@@ -14,10 +14,9 @@ export class FishingSystem {
     constructor() {
         this.state = FishingState.IDLE;
         this.charge = 0; // 0-100
+        this.lineLength = 0; // 鱼线长度
         this.hookX = 0;
         this.hookY = 0;
-        this.hookTargetX = 0;
-        this.hookTargetY = 0;
         this.waitTimer = 0;
         this.hookedTimer = 0;
         this.cooldown = 0;
@@ -33,61 +32,54 @@ export class FishingSystem {
         
         switch (this.state) {
             case FishingState.IDLE:
-                if (keys[' ']) {
+                if (keys['f'] || keys['enter']) {
                     this.state = FishingState.CHARGING;
                     this.charge = 0;
                 }
                 break;
                 
             case FishingState.CHARGING:
-                this.charge = Math.min(this.charge + deltaTime * 100, 100);
-                if (!keys[' ']) {
-                    // 松开空格，抛竿
+                this.charge = Math.min(this.charge + deltaTime * 120, 100);
+                if (!keys['f'] && !keys['enter']) {
+                    // 松开按键，抛竿
                     this.state = FishingState.CASTING;
-                    this.hookX = player.x;
-                    this.hookY = player.y;
-                    
-                    // 计算目标位置（根据蓄力值）
-                    const maxDistance = 150;
-                    const dist = (this.charge / 100) * maxDistance;
-                    const angle = Math.atan2(player.y - canvasHeight / 2, 
-                                           player.x - canvasWidth / 2);
-                    this.hookTargetX = player.x - Math.cos(angle) * dist;
-                    this.hookTargetY = player.y - Math.sin(angle) * dist;
+                    this.hookX = player.x + player.width / 2;
+                    this.hookY = player.y + player.height;
+                    this.lineLength = 0;
                 }
                 break;
                 
             case FishingState.CASTING:
-                // 鱼钩飞向目标
-                const dx = this.hookTargetX - this.hookX;
-                const dy = this.hookTargetY - this.hookY;
-                const castDist = Math.sqrt(dx * dx + dy * dy);
+                // 鱼钩向下延伸
+                this.lineLength += 200 * deltaTime;
+                this.hookY = player.y + player.height + this.lineLength;
                 
-                if (castDist < 5) {
-                    this.hookX = this.hookTargetX;
-                    this.hookY = this.hookTargetY;
+                if (this.lineLength >= (this.charge / 100) * 200 + 50) {
                     this.state = FishingState.WAITING;
-                    this.waitTimer = randomRange(1, 5);
-                } else {
-                    this.hookX += (dx / castDist) * 300 * deltaTime;
-                    this.hookY += (dy / castDist) * 300 * deltaTime;
+                    this.waitTimer = randomRange(2, 6);
                 }
                 break;
                 
             case FishingState.WAITING:
                 this.waitTimer -= deltaTime;
+                // 鱼钩轻微晃动
+                this.hookX = player.x + player.width / 2 + Math.sin(Date.now() / 300) * 5;
+                
                 if (this.waitTimer <= 0) {
                     this.state = FishingState.HOOKED;
-                    this.hookedTimer = 0.5; // 0.5秒内点击
+                    this.hookedTimer = 0.8; // 0.8秒内点击
                 }
                 break;
                 
             case FishingState.HOOKED:
                 this.hookedTimer -= deltaTime;
+                // 鱼钩剧烈晃动
+                this.hookX = player.x + player.width / 2 + Math.sin(Date.now() / 100) * 10;
+                
                 if (this.hookedTimer <= 0) {
                     // 超时，跑鱼
                     this.reset();
-                } else if (keys[' ']) {
+                } else if (keys['f'] || keys['enter']) {
                     // 成功钓到！
                     this.state = FishingState.REELING;
                     this.catchSuccess = true;
@@ -96,16 +88,12 @@ export class FishingSystem {
                 
             case FishingState.REELING:
                 // 收杆动画
-                const rdx = player.x - this.hookX;
-                const rdy = player.y - this.hookY;
-                const rdist = Math.sqrt(rdx * rdx + rdy * rdy);
+                this.lineLength -= 300 * deltaTime;
+                this.hookY = player.y + player.height + this.lineLength;
                 
-                if (rdist < 10) {
+                if (this.lineLength <= 0) {
                     // 收杆完成
                     this.reset();
-                } else {
-                    this.hookX += (rdx / rdist) * 400 * deltaTime;
-                    this.hookY += (rdy / rdist) * 400 * deltaTime;
                 }
                 break;
         }
@@ -114,7 +102,8 @@ export class FishingSystem {
     reset() {
         this.state = FishingState.IDLE;
         this.charge = 0;
-        this.cooldown = 3; // 3秒冷却
+        this.lineLength = 0;
+        this.cooldown = 2; // 2秒冷却
         this.catchSuccess = false;
     }
     
@@ -132,36 +121,74 @@ export class FishingSystem {
         
         ctx.save();
         
-        // 绘制鱼线
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
+        const hookX = this.hookX;
+        const hookY = this.hookY;
+        const playerX = player.x + player.width / 2;
+        const playerY = player.y + player.height;
+        
+        // 绘制鱼竿
+        ctx.strokeStyle = '#8B4513';
+        ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(player.x, player.y);
-        ctx.lineTo(this.hookX, this.hookY);
+        ctx.moveTo(playerX, playerY - 10);
+        ctx.lineTo(playerX + 20, playerY - 20);
+        ctx.stroke();
+        
+        // 绘制鱼线
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(playerX + 20, playerY - 20);
+        ctx.lineTo(hookX, hookY);
         ctx.stroke();
         
         // 绘制鱼钩
         ctx.fillStyle = '#c0c0c0';
         ctx.beginPath();
-        ctx.arc(this.hookX, this.hookY, 5, 0, Math.PI * 2);
+        ctx.arc(hookX, hookY, 4, 0, Math.PI * 2);
         ctx.fill();
+        
+        // 绘制鱼钩倒刺
+        ctx.strokeStyle = '#c0c0c0';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(hookX, hookY + 4);
+        ctx.lineTo(hookX - 3, hookY + 8);
+        ctx.moveTo(hookX, hookY + 4);
+        ctx.lineTo(hookX + 3, hookY + 8);
+        ctx.stroke();
         
         // 绘制蓄力条
         if (this.state === FishingState.CHARGING) {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            ctx.fillRect(player.x - 25, player.y - 40, 50, 10);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(playerX - 30, playerY - 50, 60, 12);
             
-            const chargeWidth = (this.charge / 100) * 46;
+            const chargeWidth = (this.charge / 100) * 56;
             ctx.fillStyle = this.charge > 80 ? '#2ecc71' : this.charge > 50 ? '#f39c12' : '#e74c3c';
-            ctx.fillRect(player.x - 23, player.y - 38, chargeWidth, 6);
+            ctx.fillRect(playerX - 28, playerY - 48, chargeWidth, 8);
         }
         
         // 绘制上钩提示
         if (this.state === FishingState.HOOKED) {
             ctx.fillStyle = '#f1c40f';
-            ctx.font = 'bold 20px Arial';
+            ctx.font = 'bold 24px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('!', this.hookX, this.hookY - 15);
+            ctx.fillText('!', hookX, hookY - 20);
+            
+            // 绘制提示文字
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#fff';
+            ctx.fillText('按 F 收杆!', hookX, hookY - 40);
+        }
+        
+        // 绘制操作提示
+        if (this.state === FishingState.IDLE) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(playerX - 40, playerY - 70, 80, 20);
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('按 F 钓鱼', playerX, playerY - 56);
         }
         
         ctx.restore();

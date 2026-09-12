@@ -1,4 +1,4 @@
-// 木筏网格系统模块
+// 木筏系统模块（侧视角）
 import { CELL_SIZE } from './utils.js';
 
 export const CellType = {
@@ -10,162 +10,170 @@ export const CellType = {
 
 export class Raft {
     constructor() {
-        // 木筏网格，初始3x3
-        this.grid = [];
-        this.width = 3;
-        this.height = 3;
+        // 木筏平台
+        this.platforms = [];
+        this.width = 5; // 格子数
+        this.height = 1;
         
-        // 初始化网格
-        for (let y = 0; y < this.height; y++) {
-            this.grid[y] = [];
-            for (let x = 0; x < this.width; x++) {
-                this.grid[y][x] = CellType.PLANK;
-            }
+        // 初始化平台（底部一排）
+        const startX = 800 / 2 - (this.width * CELL_SIZE) / 2;
+        const platformY = 400; // 平台Y位置
+        
+        for (let i = 0; i < this.width; i++) {
+            this.platforms.push({
+                x: startX + i * CELL_SIZE,
+                y: platformY,
+                width: CELL_SIZE,
+                height: CELL_SIZE,
+                type: CellType.PLANK,
+            });
         }
         
-        // 木筏在画布上的偏移（居中）
+        // 偏移量
         this.offsetX = 0;
         this.offsetY = 0;
     }
     
-    hasCell(x, y) {
-        if (x < 0 || x >= this.width || y < 0 || y >= this.height) {
-            return false;
-        }
-        return this.grid[y][x] !== null;
+    getPlatforms() {
+        return this.platforms;
     }
     
-    getCell(x, y) {
-        if (!this.hasCell(x, y)) return null;
-        return this.grid[y][x];
+    canExpand(direction) {
+        // 检查是否可以向某个方向扩展
+        return true; // 暂时总是可以扩展
     }
     
-    canExpand(x, y) {
-        // 检查是否与现有木筏相邻
-        const neighbors = [
-            [x - 1, y], [x + 1, y],
-            [x, y - 1], [x, y + 1]
-        ];
+    expand(direction, cellType = CellType.PLANK) {
+        // 向某个方向扩展木筏
+        const lastPlatform = this.platforms[this.platforms.length - 1];
+        const firstPlatform = this.platforms[0];
         
-        for (const [nx, ny] of neighbors) {
-            if (this.hasCell(nx, ny)) return true;
+        let newPlatform;
+        
+        switch (direction) {
+            case 'right':
+                newPlatform = {
+                    x: lastPlatform.x + CELL_SIZE,
+                    y: lastPlatform.y,
+                    width: CELL_SIZE,
+                    height: CELL_SIZE,
+                    type: cellType,
+                };
+                this.platforms.push(newPlatform);
+                break;
+            case 'left':
+                newPlatform = {
+                    x: firstPlatform.x - CELL_SIZE,
+                    y: firstPlatform.y,
+                    width: CELL_SIZE,
+                    height: CELL_SIZE,
+                    type: cellType,
+                };
+                this.platforms.unshift(newPlatform);
+                break;
+            case 'up':
+                // 向上扩展（添加新一层）
+                for (const platform of this.platforms) {
+                    this.platforms.push({
+                        x: platform.x,
+                        y: platform.y - CELL_SIZE,
+                        width: CELL_SIZE,
+                        height: CELL_SIZE,
+                        type: cellType,
+                    });
+                }
+                break;
         }
-        return false;
-    }
-    
-    expand(x, y, cellType = CellType.PLANK) {
-        if (!this.canExpand(x, y)) return false;
         
-        // 扩展网格数组
-        if (y < 0) {
-            // 向上扩展
-            this.grid.unshift(new Array(this.width).fill(null));
-            this.height++;
-            y = 0;
-        } else if (y >= this.height) {
-            // 向下扩展
-            this.grid.push(new Array(this.width).fill(null));
-            this.height++;
-        }
-        
-        if (x < 0) {
-            // 向左扩展
-            for (let row of this.grid) {
-                row.unshift(null);
-            }
-            this.width++;
-            x = 0;
-        } else if (x >= this.width) {
-            // 向右扩展
-            for (let row of this.grid) {
-                row.push(null);
-            }
-            this.width++;
-        }
-        
-        this.grid[y][x] = cellType;
+        this.width++;
         return true;
     }
     
-    getExpandableCells(playerX, playerY, offsetX, offsetY) {
-        const expandable = [];
+    getExpandablePositions(playerX, playerY) {
+        const positions = [];
         
-        for (let y = -1; y <= this.height; y++) {
-            for (let x = -1; x <= this.width; x++) {
-                if (this.hasCell(x, y)) continue;
-                if (this.canExpand(x, y)) {
-                    const px = offsetX + x * CELL_SIZE + CELL_SIZE / 2;
-                    const py = offsetY + y * CELL_SIZE + CELL_SIZE / 2;
-                    const dist = Math.sqrt((px - playerX) ** 2 + (py - playerY) ** 2);
-                    
-                    if (dist < CELL_SIZE * 2) { // 只显示附近的可扩建位置
-                        expandable.push({ x, y, px, py });
-                    }
-                }
-            }
+        // 左侧
+        if (playerX < this.platforms[0].x + CELL_SIZE * 2) {
+            positions.push({
+                x: this.platforms[0].x - CELL_SIZE,
+                y: this.platforms[0].y,
+                direction: 'left',
+            });
         }
         
-        return expandable;
+        // 右侧
+        if (playerX > this.platforms[this.platforms.length - 1].x - CELL_SIZE * 2) {
+            positions.push({
+                x: this.platforms[this.platforms.length - 1].x + CELL_SIZE,
+                y: this.platforms[0].y,
+                direction: 'right',
+            });
+        }
+        
+        return positions;
     }
     
     render(ctx) {
-        // 计算居中偏移
-        const raftPixelWidth = this.width * CELL_SIZE;
-        const raftPixelHeight = this.height * CELL_SIZE;
-        this.offsetX = (800 - raftPixelWidth) / 2;
-        this.offsetY = (600 - raftPixelHeight) / 2;
+        // 绘制海水背景
+        ctx.fillStyle = '#2980b9';
+        ctx.fillRect(0, 420, 800, 180);
         
-        ctx.save();
-        ctx.translate(this.offsetX, this.offsetY);
+        // 绘制波浪
+        ctx.strokeStyle = '#3498db';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let x = 0; x < 800; x += 20) {
+            const y = 420 + Math.sin((x + Date.now() / 500) / 30) * 5;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
         
-        // 绘制每个格子
-        for (let y = 0; y < this.height; y++) {
-            for (let x = 0; x < this.width; x++) {
-                const cell = this.grid[y][x];
-                if (cell === null) continue;
-                
-                const px = x * CELL_SIZE;
-                const py = y * CELL_SIZE;
-                
-                // 根据类型绘制不同颜色
-                switch (cell) {
-                    case CellType.PLANK:
-                        ctx.fillStyle = '#8B4513';
-                        break;
-                    case CellType.STORAGE:
-                        ctx.fillStyle = '#654321';
-                        break;
-                    case CellType.WORKBENCH:
-                        ctx.fillStyle = '#A0522D';
-                        break;
-                    case CellType.WATER_PURIFIER:
-                        ctx.fillStyle = '#4682B4';
-                        break;
-                    default:
-                        ctx.fillStyle = '#8B4513';
-                }
-                
-                ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
-                
-                // 绘制边框
-                ctx.strokeStyle = '#5D3A1A';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(px + 1, py + 1, CELL_SIZE - 2, CELL_SIZE - 2);
-                
-                // 绘制木板纹理
-                if (cell === CellType.PLANK) {
-                    ctx.strokeStyle = '#6B3410';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.moveTo(px + 5, py + CELL_SIZE / 3);
-                    ctx.lineTo(px + CELL_SIZE - 5, py + CELL_SIZE / 3);
-                    ctx.moveTo(px + 5, py + (CELL_SIZE * 2) / 3);
-                    ctx.lineTo(px + CELL_SIZE - 5, py + (CELL_SIZE * 2) / 3);
-                    ctx.stroke();
-                }
+        // 绘制木筏平台
+        for (const platform of this.platforms) {
+            // 平台主体
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+            
+            // 平台边框
+            ctx.strokeStyle = '#5D3A1A';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(platform.x, platform.y, platform.width, platform.height);
+            
+            // 木板纹理
+            ctx.strokeStyle = '#6B3410';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(platform.x + 5, platform.y + platform.height / 3);
+            ctx.lineTo(platform.x + platform.width - 5, platform.y + platform.height / 3);
+            ctx.moveTo(platform.x + 5, platform.y + (platform.height * 2) / 3);
+            ctx.lineTo(platform.x + platform.width - 5, platform.y + (platform.height * 2) / 3);
+            ctx.stroke();
+            
+            // 根据类型添加装饰
+            if (platform.type === CellType.STORAGE) {
+                ctx.fillStyle = '#654321';
+                ctx.fillRect(platform.x + 5, platform.y + 5, platform.width - 10, platform.height - 10);
+            } else if (platform.type === CellType.WATER_PURIFIER) {
+                ctx.fillStyle = '#4682B4';
+                ctx.fillRect(platform.x + 5, platform.y + 5, platform.width - 10, platform.height - 10);
             }
         }
         
-        ctx.restore();
+        // 绘制扩建提示
+        const expandable = this.getExpandablePositions(400, 300);
+        for (const pos of expandable) {
+            ctx.fillStyle = 'rgba(46, 204, 113, 0.5)';
+            ctx.fillRect(pos.x, pos.y, CELL_SIZE, CELL_SIZE);
+            ctx.strokeStyle = '#2ecc71';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(pos.x, pos.y, CELL_SIZE, CELL_SIZE);
+            
+            // 箭头指示
+            ctx.fillStyle = '#2ecc71';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(pos.direction === 'left' ? '←' : '→', pos.x + CELL_SIZE / 2, pos.y + CELL_SIZE / 2 + 7);
+        }
     }
 }

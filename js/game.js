@@ -78,18 +78,18 @@ export class Game {
                     return;
                 }
                 
-                const expandable = this.raft.getExpandableCells(
-                    this.player.x, this.player.y,
-                    this.raft.offsetX, this.raft.offsetY
+                const expandable = this.raft.getExpandablePositions(
+                    this.player.x + this.player.width / 2,
+                    this.player.y + this.player.height / 2
                 );
                 
-                for (const cell of expandable) {
+                for (const pos of expandable) {
                     const dist = Math.sqrt(
-                        (this.mouse.x - cell.px) ** 2 + 
-                        (this.mouse.y - cell.py) ** 2
+                        (this.mouse.x - pos.x - CELL_SIZE / 2) ** 2 + 
+                        (this.mouse.y - pos.y - CELL_SIZE / 2) ** 2
                     );
-                    if (dist < CELL_SIZE / 2) {
-                        if (this.raft.expand(cell.x, cell.y)) {
+                    if (dist < CELL_SIZE) {
+                        if (this.raft.expand(pos.direction)) {
                             this.player.removeFromInventory('plank');
                             this.ui.addNotification('✅ 木筏扩建成功!');
                         }
@@ -169,24 +169,6 @@ export class Game {
         this.dayNight.render(this.ctx, this.canvas.width, this.canvas.height);
         
         this.raft.render(this.ctx);
-        
-        // 建造模式下显示可扩建位置
-        if (this.buildMode && this.player) {
-            const expandable = this.raft.getExpandableCells(
-                this.player.x, this.player.y,
-                this.raft.offsetX, this.raft.offsetY
-            );
-            
-            this.ctx.save();
-            expandable.forEach(cell => {
-                this.ctx.fillStyle = 'rgba(46, 204, 113, 0.5)';
-                this.ctx.fillRect(cell.px - CELL_SIZE / 2, cell.py - CELL_SIZE / 2, CELL_SIZE, CELL_SIZE);
-                this.ctx.strokeStyle = '#2ecc71';
-                this.ctx.lineWidth = 2;
-                this.ctx.strokeRect(cell.px - CELL_SIZE / 2, cell.py - CELL_SIZE / 2, CELL_SIZE, CELL_SIZE);
-            });
-            this.ctx.restore();
-        }
         
         this.itemManager.render(this.ctx);
         this.fishing.render(this.ctx, this.player);

@@ -1,4 +1,4 @@
-// 漂浮物系统模块
+// 漂浮物系统模块（侧视角）
 import { randomRange, randomInt, distance } from './utils.js';
 
 export const ItemType = {
@@ -17,27 +17,31 @@ class FloatingItem {
         this.y = y;
         this.vx = 0;
         this.vy = 0;
-        this.size = type.rarity === 'rare' ? 20 : 15;
-        this.lifetime = 30; // 30秒后消失
+        this.size = type.rarity === 'rare' ? 24 : 18;
+        this.lifetime = 45; // 45秒后消失
         this.collected = false;
         this.collectAnim = 0;
+        this.bobOffset = Math.random() * Math.PI * 2; // 漂浮动画偏移
     }
     
-    update(deltaTime, raft, player) {
+    update(deltaTime, player) {
         if (this.collected) {
             // 收集动画：飞向玩家
             this.collectAnim += deltaTime * 5;
             if (this.collectAnim >= 1) {
-                player.addToInventory(this.type.name === '木板' ? 'plank' : 
-                                     this.type.name === '塑料' ? 'plastic' :
-                                     this.type.name === '绳子' ? 'rope' :
-                                     this.type.name === '食物' ? 'food' :
-                                     this.type.name === '金属' ? 'metal' : 'plank');
-                return false; // 移除物品
+                const inventoryType = this.type.name === '木板' ? 'plank' : 
+                                    this.type.name === '塑料' ? 'plastic' :
+                                    this.type.name === '绳子' ? 'rope' :
+                                    this.type.name === '食物' ? 'food' :
+                                    this.type.name === '金属' ? 'metal' : 'plank';
+                player.addToInventory(inventoryType);
+                return false;
             }
             // 插值到玩家位置
-            this.x += (player.x - this.x) * this.collectAnim;
-            this.y += (player.y - this.y) * this.collectAnim;
+            const targetX = player.x + player.width / 2;
+            const targetY = player.y + player.height / 2;
+            this.x += (targetX - this.x) * this.collectAnim * 0.1;
+            this.y += (targetY - this.y) * this.collectAnim * 0.1;
             return true;
         }
         
@@ -45,18 +49,20 @@ class FloatingItem {
         this.x += this.vx * deltaTime;
         this.y += this.vy * deltaTime;
         
+        // 漂浮动画
+        this.y += Math.sin(Date.now() / 500 + this.bobOffset) * 0.5;
+        
         // 减速
-        this.vx *= 0.99;
-        this.vy *= 0.99;
+        this.vx *= 0.995;
         
         // 消失计时
         this.lifetime -= deltaTime;
-        return this.lifetime > 0;
+        return this.lifetime > 0 && this.x > -50 && this.x < 850;
     }
     
     checkClick(mouseX, mouseY) {
         if (this.collected) return false;
-        return distance(mouseX, mouseY, this.x, this.y) < this.size + 10;
+        return distance(mouseX, mouseY, this.x + this.size / 2, this.y + this.size / 2) < this.size + 15;
     }
     
     collect() {
@@ -76,34 +82,37 @@ class FloatingItem {
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 2;
         
+        const centerX = this.x + this.size / 2;
+        const centerY = this.y + this.size / 2;
+        
         switch (this.type.shape) {
             case 'rect': // 木板 - 方形
-                ctx.fillRect(this.x - this.size, this.y - this.size / 2, this.size * 2, this.size);
-                ctx.strokeRect(this.x - this.size, this.y - this.size / 2, this.size * 2, this.size);
+                ctx.fillRect(this.x, this.y, this.size * 1.5, this.size * 0.8);
+                ctx.strokeRect(this.x, this.y, this.size * 1.5, this.size * 0.8);
                 break;
             case 'triangle': // 塑料 - 三角形
                 ctx.beginPath();
-                ctx.moveTo(this.x, this.y - this.size);
+                ctx.moveTo(centerX, this.y);
                 ctx.lineTo(this.x + this.size, this.y + this.size);
-                ctx.lineTo(this.x - this.size, this.y + this.size);
+                ctx.lineTo(this.x, this.y + this.size);
                 ctx.closePath();
                 ctx.fill();
                 ctx.stroke();
                 break;
             case 'circle': // 绳子 - 圆环
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.arc(centerX, centerY, this.size / 2, 0, Math.PI * 2);
                 ctx.stroke();
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size * 0.6, 0, Math.PI * 2);
+                ctx.arc(centerX, centerY, this.size / 3, 0, Math.PI * 2);
                 ctx.fill();
                 break;
             case 'star': // 食物 - 星形
                 ctx.beginPath();
                 for (let i = 0; i < 5; i++) {
                     const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
-                    const x = this.x + Math.cos(angle) * this.size;
-                    const y = this.y + Math.sin(angle) * this.size;
+                    const x = centerX + Math.cos(angle) * this.size / 2;
+                    const y = centerY + Math.sin(angle) * this.size / 2;
                     if (i === 0) ctx.moveTo(x, y);
                     else ctx.lineTo(x, y);
                 }
@@ -113,28 +122,28 @@ class FloatingItem {
                 break;
             case 'diamond': // 金属 - 菱形
                 ctx.beginPath();
-                ctx.moveTo(this.x, this.y - this.size);
-                ctx.lineTo(this.x + this.size, this.y);
-                ctx.lineTo(this.x, this.y + this.size);
-                ctx.lineTo(this.x - this.size, this.y);
+                ctx.moveTo(centerX, this.y);
+                ctx.lineTo(this.x + this.size, centerY);
+                ctx.lineTo(centerX, this.y + this.size);
+                ctx.lineTo(this.x, centerY);
                 ctx.closePath();
                 ctx.fill();
                 ctx.stroke();
                 break;
             case 'chest': // 宝箱 - 方形带装饰
-                ctx.fillRect(this.x - this.size, this.y - this.size * 0.7, this.size * 2, this.size * 1.4);
-                ctx.strokeRect(this.x - this.size, this.y - this.size * 0.7, this.size * 2, this.size * 1.4);
+                ctx.fillRect(this.x, this.y, this.size, this.size * 0.8);
+                ctx.strokeRect(this.x, this.y, this.size, this.size * 0.8);
                 ctx.fillStyle = '#8B4513';
-                ctx.fillRect(this.x - 3, this.y - this.size * 0.7, 6, this.size * 1.4);
+                ctx.fillRect(centerX - 2, this.y, 4, this.size * 0.8);
                 break;
         }
         
         // 绘制图标
-        ctx.font = '16px Arial';
+        ctx.font = '14px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = '#fff';
-        ctx.fillText(this.type.icon, this.x, this.y);
+        ctx.fillText(this.type.icon, centerX, centerY);
         
         // 稀有物品闪烁边框
         if (this.type.rarity === 'rare') {
@@ -151,7 +160,7 @@ export class ItemManager {
     constructor() {
         this.items = [];
         this.spawnTimer = 0;
-        this.spawnInterval = 2; // 每2秒生成一个
+        this.spawnInterval = 2.5; // 每2.5秒生成一个
     }
     
     update(deltaTime, canvasWidth, canvasHeight, player) {
@@ -164,7 +173,7 @@ export class ItemManager {
         
         // 更新现有物品
         this.items = this.items.filter(item => 
-            item.update(deltaTime, null, player)
+            item.update(deltaTime, player)
         );
     }
     
@@ -175,25 +184,22 @@ export class ItemManager {
             ? types[randomInt(0, 3)]  // 80%普通
             : types[randomInt(4, 5)]; // 20%稀有
         
-        // 随机位置（屏幕边缘）
-        const side = randomInt(0, 3);
+        // 随机位置（从左右两侧或上方飘入）
+        const side = randomInt(0, 2);
         let x, y;
+        
         switch (side) {
-            case 0: // 上
-                x = randomRange(0, canvasWidth);
-                y = -20;
+            case 0: // 从左侧飘入
+                x = -30;
+                y = randomRange(100, 380);
                 break;
-            case 1: // 右
-                x = canvasWidth + 20;
-                y = randomRange(0, canvasHeight);
+            case 1: // 从右侧飘入
+                x = canvasWidth + 30;
+                y = randomRange(100, 380);
                 break;
-            case 2: // 下
-                x = randomRange(0, canvasWidth);
-                y = canvasHeight + 20;
-                break;
-            case 3: // 左
-                x = -20;
-                y = randomRange(0, canvasHeight);
+            case 2: // 从上方飘落
+                x = randomRange(50, canvasWidth - 50);
+                y = -30;
                 break;
         }
         
@@ -201,10 +207,10 @@ export class ItemManager {
         
         // 朝向画布中心漂移
         const centerX = canvasWidth / 2;
-        const centerY = canvasHeight / 2;
+        const centerY = 350; // 木筏位置附近
         const angle = Math.atan2(centerY - y, centerX - x);
-        item.vx = Math.cos(angle) * randomRange(20, 50);
-        item.vy = Math.sin(angle) * randomRange(20, 50);
+        item.vx = Math.cos(angle) * randomRange(30, 70);
+        item.vy = Math.sin(angle) * randomRange(20, 50) + 20; // 添加向下速度
         
         this.items.push(item);
     }
