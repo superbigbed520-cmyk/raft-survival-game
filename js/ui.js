@@ -82,7 +82,7 @@ export class UIManager {
         ctx.fillStyle = '#fff';
         ctx.font = '14px Arial';
         ctx.textAlign = 'center';
-        const timeText = dayNight.currentTimeOfDay === 'day' ? '☀️ 白天' :\n                        dayNight.currentTimeOfDay === 'dusk' ? '🌅 黄昏' : '🌙 夜晚';
+        const timeText = dayNight.currentTimeOfDay === 'day' ? '☀️ 白天' : dayNight.currentTimeOfDay === 'dusk' ? '🌅 黄昏' : '🌙 夜晚';
         ctx.fillText(timeText, canvasWidth / 2, 30);
         
         // 操作提示
