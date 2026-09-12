@@ -1,5 +1,6 @@
 // 游戏主循环模块
 import { CELL_SIZE } from './utils.js';
+import { Player } from './player.js';
 
 export const GameState = {
     MENU: 'menu',
@@ -32,6 +33,9 @@ export class Game {
         this.keys = {};
         this.mouse = { x: 0, y: 0, clicked: false };
         
+        // 建造模式
+        this.buildMode = false;
+        
         this.setupInput();
     }
     
@@ -56,6 +60,20 @@ export class Game {
     }
     
     start() {
+        // 初始化木筏（暂时用简单的3x3）
+        this.raft = {
+            grid: [
+                [true, true, true],
+                [true, true, true],
+                [true, true, true],
+            ],
+            hasCell: (x, y) => {
+                if (x < 0 || x >= 3 || y < 0 || y >= 3) return false;
+                return this.raft.grid[y][x];
+            }
+        };
+        
+        this.player = new Player(this.raft);
         this.state = GameState.PLAYING;
         this.lastTime = performance.now();
         this.gameLoop();
@@ -76,12 +94,7 @@ export class Game {
     update() {
         if (this.state !== GameState.PLAYING) return;
         
-        // 后续任务：更新各个模块
-        // this.player.update(this.deltaTime, this.keys);
-        // this.raft.update(this.deltaTime);
-        // this.items = this.items.filter(item => item.update(this.deltaTime));
-        // this.fishing.update(this.deltaTime);
-        // this.dayNight.update(this.deltaTime);
+        this.player.update(this.deltaTime, this.keys);
     }
     
     render() {
@@ -89,12 +102,6 @@ export class Game {
         this.ctx.fillStyle = '#4a90a4';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // 后续任务：渲染各个模块
-        // this.raft.render(this.ctx);
-        // this.items.forEach(item => item.render(this.ctx));
-        // this.player.render(this.ctx);
-        // this.fishing.render(this.ctx);
-        // this.dayNight.render(this.ctx);
-        // this.ui.render(this.ctx);
+        this.player.render(this.ctx);
     }
 }
