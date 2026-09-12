@@ -1,6 +1,7 @@
 // 游戏主循环模块
 import { CELL_SIZE } from './utils.js';
 import { Player } from './player.js';
+import { Raft } from './raft.js';
 
 export const GameState = {
     MENU: 'menu',
@@ -60,19 +61,7 @@ export class Game {
     }
     
     start() {
-        // 初始化木筏（暂时用简单的3x3）
-        this.raft = {
-            grid: [
-                [true, true, true],
-                [true, true, true],
-                [true, true, true],
-            ],
-            hasCell: (x, y) => {
-                if (x < 0 || x >= 3 || y < 0 || y >= 3) return false;
-                return this.raft.grid[y][x];
-            }
-        };
-        
+        this.raft = new Raft();
         this.player = new Player(this.raft);
         this.state = GameState.PLAYING;
         this.lastTime = performance.now();
@@ -102,6 +91,7 @@ export class Game {
         this.ctx.fillStyle = '#4a90a4';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
+        this.raft.render(this.ctx);
         this.player.render(this.ctx);
     }
 }
