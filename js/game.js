@@ -5,6 +5,7 @@ import { Raft } from './raft.js';
 import { ItemManager } from './items.js';
 import { FishingSystem } from './fishing.js';
 import { DayNightCycle } from './daynight.js';
+import { UIManager } from './ui.js';
 
 export const GameState = {
     MENU: 'menu',
@@ -43,6 +44,7 @@ export class Game {
         this.itemManager = null;
         this.fishing = null;
         this.dayNight = null;
+        this.ui = null;
         
         this.setupInput();
     }
@@ -76,6 +78,7 @@ export class Game {
         this.itemManager = new ItemManager();
         this.fishing = new FishingSystem();
         this.dayNight = new DayNightCycle();
+        this.ui = new UIManager();
         this.state = GameState.PLAYING;
         this.lastTime = performance.now();
         this.gameLoop();
@@ -100,6 +103,7 @@ export class Game {
         this.itemManager.update(this.deltaTime, this.canvas.width, this.canvas.height, this.player);
         this.fishing.update(this.deltaTime, this.keys, this.player, this.canvas.width, this.canvas.height);
         this.dayNight.update(this.deltaTime);
+        this.ui.update(this.deltaTime);
         
         // 处理钓鱼收获
         const catchResult = this.fishing.getCatch();
@@ -107,8 +111,10 @@ export class Game {
             // 根据稀有度给予奖励
             if (catchResult.rarity === 'rare') {
                 this.player.addToInventory('metal', 2);
+                this.ui.addNotification('🎣 获得稀有金属 x2!');
             } else {
                 this.player.addToInventory('food', 1);
+                this.ui.addNotification('🎣 获得食物 x1');
             }
         }
     }
@@ -120,5 +126,7 @@ export class Game {
         this.itemManager.render(this.ctx);
         this.fishing.render(this.ctx, this.player);
         this.player.render(this.ctx);
+        
+        this.ui.render(this.ctx, this.player, this.dayNight, this.canvas.width, this.canvas.height);
     }
 }
