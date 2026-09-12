@@ -2,6 +2,7 @@
 import { CELL_SIZE } from './utils.js';
 import { Player } from './player.js';
 import { Raft } from './raft.js';
+import { ItemManager } from './items.js';
 
 export const GameState = {
     MENU: 'menu',
@@ -37,6 +38,8 @@ export class Game {
         // 建造模式
         this.buildMode = false;
         
+        this.itemManager = null;
+        
         this.setupInput();
     }
     
@@ -57,12 +60,16 @@ export class Game {
         
         this.canvas.addEventListener('click', (e) => {
             this.mouse.clicked = true;
+            if (this.itemManager) {
+                this.itemManager.checkClick(this.mouse.x, this.mouse.y);
+            }
         });
     }
     
     start() {
         this.raft = new Raft();
         this.player = new Player(this.raft);
+        this.itemManager = new ItemManager();
         this.state = GameState.PLAYING;
         this.lastTime = performance.now();
         this.gameLoop();
@@ -84,6 +91,7 @@ export class Game {
         if (this.state !== GameState.PLAYING) return;
         
         this.player.update(this.deltaTime, this.keys);
+        this.itemManager.update(this.deltaTime, this.canvas.width, this.canvas.height, this.player);
     }
     
     render() {
@@ -92,6 +100,7 @@ export class Game {
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
         this.raft.render(this.ctx);
+        this.itemManager.render(this.ctx);
         this.player.render(this.ctx);
     }
 }
