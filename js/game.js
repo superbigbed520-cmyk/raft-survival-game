@@ -6,6 +6,7 @@ import { ItemManager } from './items.js';
 import { FishingSystem } from './fishing.js';
 import { DayNightCycle } from './daynight.js';
 import { UIManager } from './ui.js';
+import { MissionManager } from './missions.js';
 
 export const GameState = {
     MENU: 'menu',
@@ -45,6 +46,7 @@ export class Game {
         this.fishing = null;
         this.dayNight = null;
         this.ui = null;
+        this.missions = null;
         
         this.setupInput();
     }
@@ -114,6 +116,7 @@ export class Game {
         this.fishing = new FishingSystem();
         this.dayNight = new DayNightCycle();
         this.ui = new UIManager();
+        this.missions = new MissionManager();
         this.state = GameState.PLAYING;
         this.lastTime = performance.now();
         this.gameLoop();
@@ -140,6 +143,20 @@ export class Game {
         this.dayNight.update(this.deltaTime);
         this.ui.update(this.deltaTime);
         
+        // 更新任务
+        this.missions.setRaftSize(this.raft.width * this.raft.height);
+        const completedMission = this.missions.update(this.player, this.dayNight);
+        if (completedMission) {
+            this.ui.addNotification(`🎉 任务完成: ${completedMission.title}`);
+            // 发放奖励
+            if (completedMission.reward) {
+                this.player.addToInventory(
+                    completedMission.reward.type,
+                    completedMission.reward.count
+                );
+            }
+        }
+        
         // 处理钓鱼收获
         const catchResult = this.fishing.getCatch();
         if (catchResult) {
@@ -150,6 +167,7 @@ export class Game {
             } else {
                 this.player.addToInventory('food', 1);
                 this.ui.addNotification('🎣 获得食物 x1');
+                this.missions.completedCount.fish++;
             }
         }
     }
