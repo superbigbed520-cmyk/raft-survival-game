@@ -37,8 +37,8 @@ export class Player {
     }
     
     updatePixelPosition() {
-        this.x = this.gridX * CELL_SIZE + CELL_SIZE / 2;
-        this.y = this.gridY * CELL_SIZE + CELL_SIZE / 2;
+        this.x = this.raft.offsetX + this.gridX * CELL_SIZE + CELL_SIZE / 2;
+        this.y = this.raft.offsetY + this.gridY * CELL_SIZE + CELL_SIZE / 2;
     }
     
     update(deltaTime, keys) {
