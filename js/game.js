@@ -9,6 +9,7 @@ import { UIManager } from './ui.js';
 import { MissionManager } from './missions.js';
 import { Workbench } from './workbench.js';
 import { InventoryUI } from './inventory.js';
+import { PauseMenu } from './pause.js';
 
 export const GameState = {
     MENU: 'menu',
@@ -37,6 +38,7 @@ export class Game {
         this.ui = null;
         this.activeWorkbench = null;
         this.inventoryUI = null;
+        this.pauseMenu = null;
         
         // 输入状态
         this.keys = {};
@@ -56,8 +58,38 @@ export class Game {
         window.addEventListener('keydown', (e) => {
             this.keys[e.key.toLowerCase()] = true;
             
+            // ESC键 - 暂停菜单
+            if (e.key === 'Escape') {
+                if (this.pauseMenu && this.pauseMenu.isPaused) {
+                    this.pauseMenu.toggle();
+                    this.state = GameState.PLAYING;
+                } else if (this.activeWorkbench && this.activeWorkbench.isOpen) {
+                    this.activeWorkbench.isOpen = false;
+                    this.activeWorkbench = null;
+                } else if (this.showBag) {
+                    this.showBag = false;
+                } else if (this.state === GameState.PLAYING) {
+                    this.pauseMenu.toggle();
+                    this.state = GameState.PAUSED;
+                }
+            }
+            
+            // 只有在游戏未暂停时才处理其他按键
+            if (this.state !== GameState.PLAYING && this.state !== GameState.PAUSED) {
+                return;
+            }
+            
+            // 暂停菜单处理
+            if (this.pauseMenu && this.pauseMenu.isPaused) {
+                const action = this.pauseMenu.handleInput(this.keys);
+                if (action) {
+                    this.handlePauseAction(action);
+                }
+                return;
+            }
+            
             // 按B进入/退出建造模式
-            if (e.key.toLowerCase() === 'b') {
+            if (e.key.toLowerCase() === 'b' && this.state === GameState.PLAYING) {
                 this.buildMode = !this.buildMode;
                 this.placingWorkbench = false;
                 if (this.ui) {
@@ -66,7 +98,7 @@ export class Game {
             }
             
             // 建造模式下按W放置工作台
-            if (this.buildMode && e.key.toLowerCase() === 'w') {
+            if (this.buildMode && e.key.toLowerCase() === 'w' && this.state === GameState.PLAYING) {
                 this.placingWorkbench = !this.placingWorkbench;
                 if (this.placingWorkbench) {
                     this.ui.addNotification('🔨 点击放置工作台 (需要: 木板x10 + 金属x2)');
@@ -74,7 +106,7 @@ export class Game {
             }
             
             // 按E打开/关闭工作台
-            if (e.key.toLowerCase() === 'e') {
+            if (e.key.toLowerCase() === 'e' && this.state === GameState.PLAYING) {
                 if (this.activeWorkbench) {
                     this.activeWorkbench.isOpen = !this.activeWorkbench.isOpen;
                     if (!this.activeWorkbench.isOpen) {
@@ -92,20 +124,10 @@ export class Game {
                 }
             }
             
-            // ESC关闭工作台或背包
-            if (e.key === 'Escape') {
-                if (this.activeWorkbench) {
-                    this.activeWorkbench.isOpen = false;
-                    this.activeWorkbench = null;
-                } else if (this.showBag) {
-                    this.showBag = false;
-                }
-            }
-            
             // TAB打开/关闭背包
-            if (e.key === 'Tab') {
+            if (e.key === 'Tab' && this.state === GameState.PLAYING) {
                 this.showBag = !this.showBag;
-                e.preventDefault(); // 防止Tab切换焦点
+                e.preventDefault();
             }
         });
         
@@ -120,6 +142,8 @@ export class Game {
         });
         
         this.canvas.addEventListener('click', (e) => {
+            if (this.state !== GameState.PLAYING) return;
+            
             this.mouse.clicked = true;
             
             // 工作台UI点击
@@ -128,10 +152,26 @@ export class Game {
                     this.mouse.x, this.mouse.y, this.player.inventory
                 );
                 if (result) {
-                    if (result.type === 'special') {
-                        this.ui.addNotification(`🎉 合成成功: ${result.name}!`);
-                    } else {
-                        this.ui.addNotification(`✅ 合成成功!`);
+                    this.ui.addNotification(`✅ 合成成功: ${result.name} x${result.amount}`);
+                    
+                    // 应用消耗品效果
+                    if (result.effect && result.effect.type === 'consumable') {
+                        switch (result.effect.value) {
+                            case 'health':
+                                this.player.health = Math.min(100, this.player.health + result.effect.amount);
+                                break;
+                            case 'hunger':
+                                this.player.hunger = Math.min(100, this.player.hunger + result.effect.amount);
+                                break;
+                            case 'thirst':
+                                this.player.thirst = Math.min(100, this.player.thirst + result.effect.amount);
+                                break;
+                        }
+                    }
+                    
+                    // 应用工具效果
+                    if (result.effect && result.effect.type === 'tool') {
+                        this.player.hasTool = result.effect.value;
                     }
                 }
                 return;
@@ -183,6 +223,32 @@ export class Game {
         });
     }
     
+    handlePauseAction(action) {
+        switch (action) {
+            case 'resume':
+                this.pauseMenu.toggle();
+                this.state = GameState.PLAYING;
+                break;
+            case 'recipes':
+                // 打开工作台界面（如果有）
+                this.pauseMenu.toggle();
+                this.state = GameState.PLAYING;
+                this.ui.addNotification('📖 靠近工作台按E查看合成图纸');
+                break;
+            case 'controls':
+                this.pauseMenu.toggle();
+                this.state = GameState.PLAYING;
+                this.ui.addNotification('🎮 操作说明已显示在底部');
+                break;
+            case 'quit':
+                // 重新开始游戏
+                this.pauseMenu.toggle();
+                this.state = GameState.PLAYING;
+                this.start();
+                break;
+        }
+    }
+    
     start() {
         this.raft = new Raft();
         this.player = new Player(this.raft);
@@ -192,6 +258,7 @@ export class Game {
         this.ui = new UIManager();
         this.missions = new MissionManager();
         this.inventoryUI = new InventoryUI();
+        this.pauseMenu = new PauseMenu();
         this.state = GameState.PLAYING;
         this.lastTime = performance.now();
         this.gameLoop();
@@ -202,7 +269,11 @@ export class Game {
         this.deltaTime = (currentTime - this.lastTime) / 1000;
         this.lastTime = currentTime;
         
-        this.update();
+        // 只在游戏运行时更新
+        if (this.state === GameState.PLAYING) {
+            this.update();
+        }
+        
         this.render();
         
         this.mouse.clicked = false;
@@ -210,22 +281,23 @@ export class Game {
     }
     
     update() {
-        if (this.state !== GameState.PLAYING) return;
+        // 暂停时不更新
+        if (this.pauseMenu && this.pauseMenu.isPaused) return;
         
         // 只有在工作台和背包未打开时才更新玩家
         if ((!this.activeWorkbench || !this.activeWorkbench.isOpen) && !this.showBag) {
             this.player.update(this.deltaTime, this.keys);
             
             // 更新物品栏
-            const prevKeys = { ...this.keys };
             this.inventoryUI.update(this.keys, this.player);
             
             // 检查是否使用了物品
-            if (prevKeys['q'] && !this.keys['q']) {
+            if (this.keys['q']) {
                 const result = this.inventoryUI.useItem(this.player);
                 if (result && result.success) {
                     this.ui.addNotification(result.message);
                 }
+                this.keys['q'] = false;
             }
         }
         
@@ -239,7 +311,6 @@ export class Game {
         const completedMission = this.missions.update(this.player, this.dayNight);
         if (completedMission) {
             this.ui.addNotification(`🎉 任务完成: ${completedMission.title}`);
-            // 发放奖励
             if (completedMission.reward) {
                 this.player.addToInventory(
                     completedMission.reward.type,
@@ -251,7 +322,6 @@ export class Game {
         // 处理钓鱼收获
         const catchResult = this.fishing.getCatch();
         if (catchResult) {
-            // 根据稀有度给予奖励
             if (catchResult.rarity === 'rare') {
                 this.player.addToInventory('metal', 2);
                 this.ui.addNotification('🎣 获得稀有金属 x2!');
@@ -264,15 +334,22 @@ export class Game {
     }
     
     render() {
+        // 背景
         this.dayNight.render(this.ctx, this.canvas.width, this.canvas.height);
         
+        // 木筏
         this.raft.render(this.ctx);
         
+        // 物品
         this.itemManager.render(this.ctx);
+        
+        // 钓鱼
         this.fishing.render(this.ctx, this.player);
+        
+        // 玩家
         this.player.render(this.ctx);
         
-        // 绘制工作台放置提示
+        // 工作台放置提示
         if (this.placingWorkbench) {
             this.ctx.fillStyle = 'rgba(46, 204, 113, 0.5)';
             this.ctx.fillRect(this.mouse.x - 20, this.mouse.y - 20, 40, 40);
@@ -285,7 +362,7 @@ export class Game {
             this.ctx.fillText('🔨', this.mouse.x, this.mouse.y + 7);
         }
         
-        // 绘制工作台UI
+        // 工作台UI
         if (this.activeWorkbench && this.activeWorkbench.isOpen) {
             this.activeWorkbench.renderUI(
                 this.ctx, 
@@ -295,14 +372,20 @@ export class Game {
             );
         }
         
-        // 绘制背包UI
+        // 背包UI
         if (this.showBag) {
             this.inventoryUI.renderBag(this.ctx, this.player, this.canvas.width, this.canvas.height);
         }
         
-        // 绘制快捷栏（在最上层）
+        // 快捷栏（最上层）
         this.inventoryUI.renderQuickSlots(this.ctx, this.player, this.canvas.width, this.canvas.height);
         
+        // UI
         this.ui.render(this.ctx, this.player, this.dayNight, this.canvas.width, this.canvas.height);
+        
+        // 暂停菜单（最最上层）
+        if (this.pauseMenu) {
+            this.pauseMenu.render(this.ctx, this.canvas.width, this.canvas.height);
+        }
     }
 }
