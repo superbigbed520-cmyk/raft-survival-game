@@ -8,6 +8,7 @@ import { DayNightCycle } from './daynight.js';
 import { UIManager } from './ui.js';
 import { MissionManager } from './missions.js';
 import { Workbench } from './workbench.js';
+import { InventoryUI } from './inventory.js';
 
 export const GameState = {
     MENU: 'menu',
@@ -35,6 +36,7 @@ export class Game {
         this.missions = null;
         this.ui = null;
         this.activeWorkbench = null;
+        this.inventoryUI = null;
         
         // 输入状态
         this.keys = {};
@@ -43,6 +45,9 @@ export class Game {
         // 建造模式
         this.buildMode = false;
         this.placingWorkbench = false;
+        
+        // 背包
+        this.showBag = false;
         
         this.setupInput();
     }
@@ -87,12 +92,20 @@ export class Game {
                 }
             }
             
-            // ESC关闭工作台
+            // ESC关闭工作台或背包
             if (e.key === 'Escape') {
                 if (this.activeWorkbench) {
                     this.activeWorkbench.isOpen = false;
                     this.activeWorkbench = null;
+                } else if (this.showBag) {
+                    this.showBag = false;
                 }
+            }
+            
+            // TAB打开/关闭背包
+            if (e.key === 'Tab') {
+                this.showBag = !this.showBag;
+                e.preventDefault(); // 防止Tab切换焦点
             }
         });
         
@@ -178,6 +191,7 @@ export class Game {
         this.dayNight = new DayNightCycle();
         this.ui = new UIManager();
         this.missions = new MissionManager();
+        this.inventoryUI = new InventoryUI();
         this.state = GameState.PLAYING;
         this.lastTime = performance.now();
         this.gameLoop();
@@ -198,9 +212,10 @@ export class Game {
     update() {
         if (this.state !== GameState.PLAYING) return;
         
-        // 只有在工作台未打开时才更新玩家
-        if (!this.activeWorkbench || !this.activeWorkbench.isOpen) {
+        // 只有在工作台和背包未打开时才更新玩家
+        if ((!this.activeWorkbench || !this.activeWorkbench.isOpen) && !this.showBag) {
             this.player.update(this.deltaTime, this.keys);
+            this.inventoryUI.update(this.keys, this.player);
         }
         
         this.itemManager.update(this.deltaTime, this.canvas.width, this.canvas.height, this.player);
@@ -268,6 +283,14 @@ export class Game {
                 this.canvas.height
             );
         }
+        
+        // 绘制背包UI
+        if (this.showBag) {
+            this.inventoryUI.renderBag(this.ctx, this.player, this.canvas.width, this.canvas.height);
+        }
+        
+        // 绘制快捷栏（在最上层）
+        this.inventoryUI.renderQuickSlots(this.ctx, this.player, this.canvas.width, this.canvas.height);
         
         this.ui.render(this.ctx, this.player, this.dayNight, this.canvas.width, this.canvas.height);
     }

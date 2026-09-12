@@ -56,35 +56,55 @@ export class Raft {
         
         switch (direction) {
             case 'right':
-                newPlatform = {
-                    x: lastPlatform.x + CELL_SIZE,
-                    y: lastPlatform.y,
-                    width: CELL_SIZE,
-                    height: CELL_SIZE,
-                    type: cellType,
-                };
-                this.platforms.push(newPlatform);
-                break;
-            case 'left':
-                newPlatform = {
-                    x: firstPlatform.x - CELL_SIZE,
-                    y: firstPlatform.y,
-                    width: CELL_SIZE,
-                    height: CELL_SIZE,
-                    type: cellType,
-                };
-                this.platforms.unshift(newPlatform);
-                break;
-            case 'up':
-                // 向上扩展（添加新一层）
-                for (const platform of this.platforms) {
+                // 找到最底层的平台
+                const bottomY = Math.max(...this.platforms.map(p => p.y));
+                const bottomPlatforms = this.platforms.filter(p => p.y === bottomY);
+                for (const p of bottomPlatforms) {
                     this.platforms.push({
-                        x: platform.x,
-                        y: platform.y - CELL_SIZE,
+                        x: p.x + CELL_SIZE,
+                        y: p.y,
                         width: CELL_SIZE,
                         height: CELL_SIZE,
                         type: cellType,
                     });
+                }
+                break;
+            case 'left':
+                const bottomYLeft = Math.max(...this.platforms.map(p => p.y));
+                const bottomPlatformsLeft = this.platforms.filter(p => p.y === bottomYLeft);
+                for (const p of bottomPlatformsLeft) {
+                    this.platforms.push({
+                        x: p.x - CELL_SIZE,
+                        y: p.y,
+                        width: CELL_SIZE,
+                        height: CELL_SIZE,
+                        type: cellType,
+                    });
+                }
+                break;
+            case 'up':
+                // 向上扩展（添加新一层）
+                const currentTopY = Math.min(...this.platforms.map(p => p.y));
+                // 找到最顶层的平台
+                const topPlatforms = this.platforms.filter(p => p.y === currentTopY);
+                // 获取最左和最右的x坐标
+                const minX = Math.min(...this.platforms.map(p => p.x));
+                const maxX = Math.max(...this.platforms.map(p => p.x + p.width));
+                // 添加新一层（只在有支撑的地方添加）
+                for (let x = minX; x < maxX; x += CELL_SIZE) {
+                    // 检查下方是否有平台
+                    const hasSupport = this.platforms.some(p => 
+                        p.x === x && p.y === currentTopY + CELL_SIZE
+                    );
+                    if (hasSupport || this.platforms.length < 10) {
+                        this.platforms.push({
+                            x: x,
+                            y: currentTopY - CELL_SIZE,
+                            width: CELL_SIZE,
+                            height: CELL_SIZE,
+                            type: cellType,
+                        });
+                    }
                 }
                 break;
         }
@@ -106,22 +126,35 @@ export class Raft {
     
     getExpandablePositions(playerX, playerY) {
         const positions = [];
+        const currentTopY = Math.min(...this.platforms.map(p => p.y));
+        const currentBottomY = Math.max(...this.platforms.map(p => p.y));
+        const leftX = Math.min(...this.platforms.map(p => p.x));
+        const rightX = Math.max(...this.platforms.map(p => p.x));
         
         // 左侧
-        if (playerX < this.platforms[0].x + CELL_SIZE * 2) {
+        if (playerX < leftX + CELL_SIZE * 3) {
             positions.push({
-                x: this.platforms[0].x - CELL_SIZE,
-                y: this.platforms[0].y,
+                x: leftX - CELL_SIZE,
+                y: currentBottomY,
                 direction: 'left',
             });
         }
         
         // 右侧
-        if (playerX > this.platforms[this.platforms.length - 1].x - CELL_SIZE * 2) {
+        if (playerX > rightX - CELL_SIZE * 2) {
             positions.push({
-                x: this.platforms[this.platforms.length - 1].x + CELL_SIZE,
-                y: this.platforms[0].y,
+                x: rightX + CELL_SIZE,
+                y: currentBottomY,
                 direction: 'right',
+            });
+        }
+        
+        // 上方
+        if (playerY < currentTopY + CELL_SIZE * 2) {
+            positions.push({
+                x: playerX,
+                y: currentTopY - CELL_SIZE,
+                direction: 'up',
             });
         }
         

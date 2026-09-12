@@ -87,11 +87,12 @@ export class UIManager {
         
         // 操作提示
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(10, canvasHeight - 50, 320, 40);
+        ctx.fillRect(10, canvasHeight - 100, 350, 55);
         ctx.fillStyle = '#fff';
-        ctx.font = '12px Arial';
+        ctx.font = '11px Arial';
         ctx.textAlign = 'left';
-        ctx.fillText('AD: 移动 | W/空格: 跳跃 | F: 钓鱼 | 点击: 拾取 | B: 建造', 20, canvasHeight - 25);
+        ctx.fillText('AD: 移动 | W/空格: 跳跃 | F: 钓鱼 | E: 工作台', 20, canvasHeight - 80);
+        ctx.fillText('TAB: 背包 | B: 建造 | 1-6: 切换物品 | 点击: 拾取', 20, canvasHeight - 60);
         
         // 通知
         this.notifications.forEach((n, i) => {
