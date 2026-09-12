@@ -53,6 +53,15 @@ export const Recipes = [
         icon: '💧',
         special: true,
     },
+    {
+        id: 'water',
+        name: '淡水',
+        result: { type: 'water', amount: 2 },
+        ingredients: [
+            { type: 'plastic', amount: 2 },
+        ],
+        icon: '💧',
+    },
 ];
 
 export class Workbench {

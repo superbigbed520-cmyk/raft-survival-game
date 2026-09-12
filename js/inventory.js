@@ -11,11 +11,12 @@ export class InventoryUI {
         
         // 物品类型定义
         this.itemTypes = {
-            plank: { name: '木板', icon: '🪵', color: '#8B4513' },
-            plastic: { name: '塑料', icon: '📦', color: '#3498db' },
-            rope: { name: '绳子', icon: '🧵', color: '#f39c12' },
-            food: { name: '食物', icon: '🍖', color: '#e74c3c' },
-            metal: { name: '金属', icon: '⚙️', color: '#95a5a6' },
+            plank: { name: '木板', icon: '🪵', color: '#8B4513', usable: false },
+            plastic: { name: '塑料', icon: '📦', color: '#3498db', usable: false },
+            rope: { name: '绳子', icon: '🧵', color: '#f39c12', usable: false },
+            food: { name: '食物', icon: '🍖', color: '#e74c3c', usable: true, effect: 'hunger', value: 30 },
+            metal: { name: '金属', icon: '⚙️', color: '#95a5a6', usable: false },
+            water: { name: '淡水', icon: '💧', color: '#3498db', usable: true, effect: 'thirst', value: 30 },
         };
     }
     
@@ -32,6 +33,55 @@ export class InventoryUI {
             this.isBagOpen = !this.isBagOpen;
             keys['tab'] = false; // 防止连续触发
         }
+        
+        // Q键使用选中的物品
+        if (keys['q']) {
+            this.useItem(player);
+            keys['q'] = false;
+        }
+    }
+    
+    useItem(player) {
+        const itemTypes = Object.keys(this.itemTypes);
+        if (this.selectedSlot >= itemTypes.length) return false;
+        
+        const itemType = itemTypes[this.selectedSlot];
+        const itemDef = this.itemTypes[itemType];
+        
+        // 检查是否可以使用
+        if (!itemDef.usable) {
+            return false;
+        }
+        
+        // 检查数量
+        if ((player.inventory[itemType] || 0) <= 0) {
+            return false;
+        }
+        
+        // 使用物品
+        player.inventory[itemType]--;
+        
+        // 应用效果
+        switch (itemDef.effect) {
+            case 'hunger':
+                player.hunger = Math.min(100, player.hunger + itemDef.value);
+                return { success: true, message: `🍖 饱食度 +${itemDef.value}` };
+            case 'thirst':
+                player.thirst = Math.min(100, player.thirst + itemDef.value);
+                return { success: true, message: `💧 口渴度 +${itemDef.value}` };
+            case 'health':
+                player.health = Math.min(100, player.health + itemDef.value);
+                return { success: true, message: `❤️ 生命值 +${itemDef.value}` };
+        }
+        
+        return false;
+    }
+    
+    getSelectedItem() {
+        const itemTypes = Object.keys(this.itemTypes);
+        if (this.selectedSlot >= itemTypes.length) return null;
+        const itemType = itemTypes[this.selectedSlot];
+        return { type: itemType, ...this.itemTypes[itemType] };
     }
     
     render(ctx, player, canvasWidth, canvasHeight) {

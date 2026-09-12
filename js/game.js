@@ -215,7 +215,18 @@ export class Game {
         // 只有在工作台和背包未打开时才更新玩家
         if ((!this.activeWorkbench || !this.activeWorkbench.isOpen) && !this.showBag) {
             this.player.update(this.deltaTime, this.keys);
+            
+            // 更新物品栏
+            const prevKeys = { ...this.keys };
             this.inventoryUI.update(this.keys, this.player);
+            
+            // 检查是否使用了物品
+            if (prevKeys['q'] && !this.keys['q']) {
+                const result = this.inventoryUI.useItem(this.player);
+                if (result && result.success) {
+                    this.ui.addNotification(result.message);
+                }
+            }
         }
         
         this.itemManager.update(this.deltaTime, this.canvas.width, this.canvas.height, this.player);
