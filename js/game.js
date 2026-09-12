@@ -3,6 +3,7 @@ import { CELL_SIZE } from './utils.js';
 import { Player } from './player.js';
 import { Raft } from './raft.js';
 import { ItemManager } from './items.js';
+import { FishingSystem } from './fishing.js';
 
 export const GameState = {
     MENU: 'menu',
@@ -39,6 +40,7 @@ export class Game {
         this.buildMode = false;
         
         this.itemManager = null;
+        this.fishing = null;
         
         this.setupInput();
     }
@@ -70,6 +72,7 @@ export class Game {
         this.raft = new Raft();
         this.player = new Player(this.raft);
         this.itemManager = new ItemManager();
+        this.fishing = new FishingSystem();
         this.state = GameState.PLAYING;
         this.lastTime = performance.now();
         this.gameLoop();
@@ -92,6 +95,18 @@ export class Game {
         
         this.player.update(this.deltaTime, this.keys);
         this.itemManager.update(this.deltaTime, this.canvas.width, this.canvas.height, this.player);
+        this.fishing.update(this.deltaTime, this.keys, this.player, this.canvas.width, this.canvas.height);
+        
+        // 处理钓鱼收获
+        const catchResult = this.fishing.getCatch();
+        if (catchResult) {
+            // 根据稀有度给予奖励
+            if (catchResult.rarity === 'rare') {
+                this.player.addToInventory('metal', 2);
+            } else {
+                this.player.addToInventory('food', 1);
+            }
+        }
     }
     
     render() {
@@ -101,6 +116,7 @@ export class Game {
         
         this.raft.render(this.ctx);
         this.itemManager.render(this.ctx);
+        this.fishing.render(this.ctx, this.player);
         this.player.render(this.ctx);
     }
 }
