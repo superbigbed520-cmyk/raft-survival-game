@@ -80,13 +80,13 @@ export class Player {
             this.updatePixelPosition();
         }
         
-        // 更新饥饿和口渴
-        this.hunger = clamp(this.hunger - deltaTime * 2, 0, 100);
-        this.thirst = clamp(this.thirst - deltaTime * 3, 0, 100);
+        // 更新饥饿和口渴（降低消耗速度）
+        this.hunger = clamp(this.hunger - deltaTime * 0.5, 0, 100);
+        this.thirst = clamp(this.thirst - deltaTime * 0.7, 0, 100);
         
-        // 饥饿或口渴为0时掉血
+        // 饥饿或口渴为0时掉血（降低掉血速度）
         if (this.hunger === 0 || this.thirst === 0) {
-            this.health = clamp(this.health - deltaTime * 10, 0, 100);
+            this.health = clamp(this.health - deltaTime * 3, 0, 100);
         }
         
         // 动画计时

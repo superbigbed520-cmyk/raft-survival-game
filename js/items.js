@@ -2,12 +2,12 @@
 import { randomRange, randomInt, distance } from './utils.js';
 
 export const ItemType = {
-    PLANK: { name: '木板', color: '#8B4513', rarity: 'common' },
-    PLASTIC: { name: '塑料', color: '#3498db', rarity: 'common' },
-    ROPE: { name: '绳子', color: '#f39c12', rarity: 'common' },
-    FOOD: { name: '食物', color: '#e74c3c', rarity: 'common' },
-    METAL: { name: '金属', color: '#95a5a6', rarity: 'rare' },
-    CHEST: { name: '宝箱', color: '#f1c40f', rarity: 'rare' },
+    PLANK: { name: '木板', color: '#8B4513', rarity: 'common', shape: 'rect', icon: '🪵' },
+    PLASTIC: { name: '塑料', color: '#3498db', rarity: 'common', shape: 'triangle', icon: '📦' },
+    ROPE: { name: '绳子', color: '#f39c12', rarity: 'common', shape: 'circle', icon: '🧵' },
+    FOOD: { name: '食物', color: '#e74c3c', rarity: 'common', shape: 'star', icon: '🍖' },
+    METAL: { name: '金属', color: '#95a5a6', rarity: 'rare', shape: 'diamond', icon: '⚙️' },
+    CHEST: { name: '宝箱', color: '#f1c40f', rarity: 'rare', shape: 'chest', icon: '🎁' },
 };
 
 class FloatingItem {
@@ -71,22 +71,75 @@ class FloatingItem {
         const alpha = this.lifetime < 5 ? (Math.sin(Date.now() / 100) + 1) / 2 : 1;
         ctx.globalAlpha = alpha;
         
-        // 绘制物品
+        // 绘制不同形状的物品
         ctx.fillStyle = this.type.color;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
         
-        // 高光
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.beginPath();
-        ctx.arc(this.x - this.size / 3, this.y - this.size / 3, this.size / 3, 0, Math.PI * 2);
-        ctx.fill();
+        switch (this.type.shape) {
+            case 'rect': // 木板 - 方形
+                ctx.fillRect(this.x - this.size, this.y - this.size / 2, this.size * 2, this.size);
+                ctx.strokeRect(this.x - this.size, this.y - this.size / 2, this.size * 2, this.size);
+                break;
+            case 'triangle': // 塑料 - 三角形
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y - this.size);
+                ctx.lineTo(this.x + this.size, this.y + this.size);
+                ctx.lineTo(this.x - this.size, this.y + this.size);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                break;
+            case 'circle': // 绳子 - 圆环
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * 0.6, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            case 'star': // 食物 - 星形
+                ctx.beginPath();
+                for (let i = 0; i < 5; i++) {
+                    const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+                    const x = this.x + Math.cos(angle) * this.size;
+                    const y = this.y + Math.sin(angle) * this.size;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                break;
+            case 'diamond': // 金属 - 菱形
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y - this.size);
+                ctx.lineTo(this.x + this.size, this.y);
+                ctx.lineTo(this.x, this.y + this.size);
+                ctx.lineTo(this.x - this.size, this.y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                break;
+            case 'chest': // 宝箱 - 方形带装饰
+                ctx.fillRect(this.x - this.size, this.y - this.size * 0.7, this.size * 2, this.size * 1.4);
+                ctx.strokeRect(this.x - this.size, this.y - this.size * 0.7, this.size * 2, this.size * 1.4);
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(this.x - 3, this.y - this.size * 0.7, 6, this.size * 1.4);
+                break;
+        }
+        
+        // 绘制图标
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(this.type.icon, this.x, this.y);
         
         // 稀有物品闪烁边框
         if (this.type.rarity === 'rare') {
             ctx.strokeStyle = '#f1c40f';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 3;
             ctx.stroke();
         }
         
