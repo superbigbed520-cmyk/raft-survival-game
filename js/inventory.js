@@ -16,6 +16,7 @@ export class InventoryUI {
             rope: { name: '绳子', icon: '🧵', color: '#f39c12', usable: false },
             food: { name: '食物', icon: '🍖', color: '#e74c3c', usable: true, effect: 'hunger', value: 30 },
             metal: { name: '金属', icon: '⚙️', color: '#95a5a6', usable: false },
+            chest: { name: '宝箱', icon: '🎁', color: '#f1c40f', usable: false },
             water: { name: '淡水', icon: '💧', color: '#3498db', usable: true, effect: 'thirst', value: 30 },
         };
     }

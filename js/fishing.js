@@ -101,7 +101,6 @@ export class FishingSystem {
     
     reset() {
         this.state = FishingState.IDLE;
-        this.charge = 0;
         this.lineLength = 0;
         this.cooldown = 2; // 2秒冷却
         this.catchSuccess = false;
@@ -111,6 +110,8 @@ export class FishingSystem {
         if (this.catchSuccess) {
             // 根据蓄力值决定稀有度
             const rarity = this.charge > 80 ? 'rare' : this.charge > 50 ? 'uncommon' : 'common';
+            this.catchSuccess = false; // 消耗结果，防止重复触发
+            this.charge = 0;
             return { rarity };
         }
         return null;

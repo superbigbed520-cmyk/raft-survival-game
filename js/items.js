@@ -8,6 +8,7 @@ export const ItemType = {
     FOOD: { name: '食物', color: '#e74c3c', rarity: 'common', shape: 'star', icon: '🍖' },
     METAL: { name: '金属', color: '#95a5a6', rarity: 'rare', shape: 'diamond', icon: '⚙️' },
     CHEST: { name: '宝箱', color: '#f1c40f', rarity: 'rare', shape: 'chest', icon: '🎁' },
+    WATER: { name: '淡水', color: '#3498db', rarity: 'common', shape: 'circle', icon: '💧' },
 };
 
 class FloatingItem {
@@ -29,12 +30,24 @@ class FloatingItem {
             // 收集动画：飞向玩家
             this.collectAnim += deltaTime * 5;
             if (this.collectAnim >= 1) {
-                const inventoryType = this.type.name === '木板' ? 'plank' : 
-                                    this.type.name === '塑料' ? 'plastic' :
-                                    this.type.name === '绳子' ? 'rope' :
-                                    this.type.name === '食物' ? 'food' :
-                                    this.type.name === '金属' ? 'metal' : 'plank';
-                player.addToInventory(inventoryType);
+                const nameToType = {
+                    '木板': 'plank',
+                    '塑料': 'plastic',
+                    '绳子': 'rope',
+                    '食物': 'food',
+                    '金属': 'metal',
+                    '宝箱': 'chest',
+                };
+                const inventoryType = nameToType[this.type.name] || 'plank';
+                
+                // 宝箱：随机给3-5个基础资源
+                if (inventoryType === 'chest') {
+                    player.addToInventory('plank', 3 + Math.floor(Math.random() * 3));
+                    player.addToInventory('rope', 1 + Math.floor(Math.random() * 2));
+                    if (Math.random() > 0.5) player.addToInventory('metal', 1);
+                } else {
+                    player.addToInventory(inventoryType);
+                }
                 return false;
             }
             // 插值到玩家位置
