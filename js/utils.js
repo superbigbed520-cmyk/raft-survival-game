@@ -1,26 +1,11 @@
-// 工具函数模块
+// 工具函数
+export const CELL = 40;
+export const WATER_Y = 420;
+export const W = 800;
+export const H = 600;
 
-export const CELL_SIZE = 40;
-
-export function randomRange(min, max) {
-    return Math.random() * (max - min) + min;
-}
-
-export function randomInt(min, max) {
-    return Math.floor(randomRange(min, max + 1));
-}
-
-export function distance(x1, y1, x2, y2) {
-    return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-}
-
-export function clamp(value, min, max) {
-    return Math.min(Math.max(value, min), max);
-}
-
-export function checkCollision(rect1, rect2) {
-    return rect1.x < rect2.x + rect2.width &&
-           rect1.x + rect1.width > rect2.x &&
-           rect1.y < rect2.y + rect2.height &&
-           rect1.y + rect1.height > rect2.y;
-}
+export const rand = (a, b) => Math.random() * (b - a) + a;
+export const randInt = (a, b) => Math.floor(rand(a, b + 1));
+export const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+export const dist = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1);
+export const lerp = (a, b, t) => a + (b - a) * clamp(t, 0, 1);

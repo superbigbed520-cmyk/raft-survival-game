@@ -1,391 +1,242 @@
-// 游戏主循环模块
-import { CELL_SIZE } from './utils.js';
+// 游戏主类
+import { W, H, CELL, WATER_Y, clamp, dist } from './utils.js';
 import { Player } from './player.js';
-import { Raft } from './raft.js';
-import { ItemManager } from './items.js';
-import { FishingSystem } from './fishing.js';
-import { DayNightCycle } from './daynight.js';
-import { UIManager } from './ui.js';
-import { MissionManager } from './missions.js';
-import { Workbench } from './workbench.js';
-import { InventoryUI } from './inventory.js';
-import { PauseMenu } from './pause.js';
-
-export const GameState = {
-    MENU: 'menu',
-    PLAYING: 'playing',
-    PAUSED: 'paused',
-    FISHING: 'fishing',
-    EXPLORING: 'exploring',
-    DIALOG: 'dialog',
-};
+import { Raft, ItemSpawner, DayNight } from './world.js';
+import { Fishing } from './fishing.js';
+import { UI } from './ui.js';
+import { ITEMS, HOTBAR, RECIPES, CATS, canCraft, craft } from './crafting.js';
 
 export class Game {
-    constructor(canvas) {
-        this.canvas = canvas;
-        this.ctx = canvas.getContext('2d');
-        this.state = GameState.MENU;
-        this.lastTime = 0;
-        this.deltaTime = 0;
-        
-        // 游戏对象
-        this.player = null;
-        this.raft = null;
-        this.itemManager = null;
-        this.fishing = null;
-        this.dayNight = null;
-        this.missions = null;
-        this.ui = null;
-        this.activeWorkbench = null;
-        this.inventoryUI = null;
-        this.pauseMenu = null;
-        
-        // 输入状态
-        this.keys = {};
-        this.mouse = { x: 0, y: 0, clicked: false };
-        
-        // 建造模式
-        this.buildMode = false;
-        this.placingWorkbench = false;
-        
-        // 背包
-        this.showBag = false;
-        
-        this.setupInput();
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.state = 'playing'; // playing | paused | craft | bag | building
+    this.buildSub = null;   // null | 'raft' | 'workbench'
+    this.buildDir = null;
+
+    // 子系统
+    this.raft = new Raft();
+    this.player = new Player(this.raft);
+    this.spawner = new ItemSpawner();
+    this.dayNight = new DayNight();
+    this.fishing = new Fishing();
+    this.ui = new UI();
+
+    // 输入
+    this.keys = {};
+    this.mouse = { x: 0, y: 0, clicked: false };
+    this._input = { left:0, right:0, jump:0, fish:0 };
+    this._prevKeys = {};
+
+    // 合成UI状态
+    this.craftCat = '全部';
+    this.craftOffset = 0;
+    this.pauseSel = 0;
+
+    this._bind();
+  }
+
+  _bind() {
+    window.addEventListener('keydown', e => {
+      const k = e.key.toLowerCase();
+      this.keys[k] = true;
+      if (k === 'tab') e.preventDefault();
+      this._keyPressed(k);
+    });
+    window.addEventListener('keyup', e => { this.keys[e.key.toLowerCase()] = false; });
+    this.canvas.addEventListener('mousemove', e => {
+      const r = this.canvas.getBoundingClientRect();
+      this.mouse.x = e.clientX - r.left; this.mouse.y = e.clientY - r.top;
+    });
+    this.canvas.addEventListener('click', () => this._click());
+  }
+
+  _keyPressed(k) {
+    switch (this.state) {
+      case 'playing':
+        if (k==='escape') { this.state='paused'; this.pauseSel=0; }
+        if (k==='tab')    { this.state='bag'; }
+        if (k==='b')      { this.state='building'; this.buildSub=null; this.ui.toast('🔨 建造模式'); }
+        if (k==='e') {
+          for (const wb of this.raft.workbenches) {
+            if (dist(this.player.x+12, this.player.y+16, wb.x+20, wb.y+20) < 70) {
+              this.state='craft'; this.craftCat='全部'; this.craftOffset=0;
+              return;
+            }
+          }
+          this.ui.toast('附近没有工作台');
+        }
+        if (k>='1' && k<='6') this.ui.selSlot = +k - 1;
+        if (k==='q') {
+          const id = HOTBAR[this.ui.selSlot];
+          const def = ITEMS[id];
+          if (def && def.usable) {
+            const r = this.player.useItem(id);
+            if (r==='hunger') this.ui.toast('🍖 饱食度提升!');
+            if (r==='thirst') this.ui.toast('💧 口渴度提升!');
+            if (r==='hp')     this.ui.toast('❤️ 生命恢复!');
+          }
+        }
+        break;
+
+      case 'paused':
+        if (k==='escape') this.state='playing';
+        if (k==='w') this.pauseSel = (this.pauseSel+3)%4;
+        if (k==='s') this.pauseSel = (this.pauseSel+1)%4;
+        if (k==='enter'||k===' ') {
+          const acts = ['resume','recipes','help','restart'];
+          const a = acts[this.pauseSel];
+          if (a==='resume') this.state='playing';
+          if (a==='recipes') { this.state='craft'; this.craftCat='全部'; this.craftOffset=0; }
+          if (a==='help') { this.ui.toast('看底部操作提示'); this.state='playing'; }
+          if (a==='restart') location.reload();
+        }
+        break;
+
+      case 'craft':
+        if (k==='escape'||k==='e') this.state='playing';
+        if (k==='a') { const i=CATS.indexOf(this.craftCat); this.craftCat=CATS[(i-1+CATS.length)%CATS.length]; this.craftOffset=0; }
+        if (k==='d') { const i=CATS.indexOf(this.craftCat); this.craftCat=CATS[(i+1)%CATS.length]; this.craftOffset=0; }
+        if (k==='w') this.craftOffset = Math.max(0, this.craftOffset-1);
+        if (k==='s') this.craftOffset += 1;
+        break;
+
+      case 'bag':
+        if (k==='escape'||k==='tab') this.state='playing';
+        break;
+
+      case 'building':
+        if (k==='escape'||k==='b') { this.state='playing'; this.buildSub=null; }
+        if (k==='w') { this.buildSub='workbench'; this.ui.toast('点击放置工作台(木板10+金属2)'); }
+        if (k==='r') { this.buildSub='raft'; this.ui.toast('点击绿色区域扩建(木板1)'); }
+        break;
     }
-    
-    setupInput() {
-        window.addEventListener('keydown', (e) => {
-            this.keys[e.key.toLowerCase()] = true;
-            
-            // ESC键 - 暂停菜单
-            if (e.key === 'Escape') {
-                if (this.pauseMenu && this.pauseMenu.isPaused) {
-                    this.pauseMenu.toggle();
-                    this.state = GameState.PLAYING;
-                } else if (this.activeWorkbench && this.activeWorkbench.isOpen) {
-                    this.activeWorkbench.isOpen = false;
-                    this.activeWorkbench = null;
-                } else if (this.showBag) {
-                    this.showBag = false;
-                } else if (this.state === GameState.PLAYING) {
-                    this.pauseMenu.toggle();
-                    this.state = GameState.PAUSED;
-                }
-            }
-            
-            // 只有在游戏未暂停时才处理其他按键
-            if (this.state !== GameState.PLAYING && this.state !== GameState.PAUSED) {
-                return;
-            }
-            
-            // 暂停菜单处理
-            if (this.pauseMenu && this.pauseMenu.isPaused) {
-                const action = this.pauseMenu.handleInput(this.keys);
-                if (action) {
-                    this.handlePauseAction(action);
-                }
-                return;
-            }
-            
-            // 按B进入/退出建造模式
-            if (e.key.toLowerCase() === 'b' && this.state === GameState.PLAYING) {
-                this.buildMode = !this.buildMode;
-                this.placingWorkbench = false;
-                if (this.ui) {
-                    this.ui.addNotification(this.buildMode ? '🔨 建造模式开启 (按W放置工作台)' : '🔨 建造模式关闭');
-                }
-            }
-            
-            // 建造模式下按W放置工作台
-            if (this.buildMode && e.key.toLowerCase() === 'w' && this.state === GameState.PLAYING) {
-                this.placingWorkbench = !this.placingWorkbench;
-                if (this.placingWorkbench) {
-                    this.ui.addNotification('🔨 点击放置工作台 (需要: 木板x10 + 金属x2)');
-                }
-            }
-            
-            // 按E打开/关闭工作台
-            if (e.key.toLowerCase() === 'e' && this.state === GameState.PLAYING) {
-                if (this.activeWorkbench) {
-                    this.activeWorkbench.isOpen = !this.activeWorkbench.isOpen;
-                    if (!this.activeWorkbench.isOpen) {
-                        this.activeWorkbench = null;
-                    }
-                } else {
-                    // 检查附近的工作台
-                    for (const workbench of this.raft.getWorkbenches()) {
-                        if (workbench.isPlayerNear(this.player)) {
-                            this.activeWorkbench = workbench;
-                            this.activeWorkbench.isOpen = true;
-                            break;
-                        }
-                    }
-                }
-            }
-            
-            // TAB打开/关闭背包
-            if (e.key === 'Tab' && this.state === GameState.PLAYING) {
-                this.showBag = !this.showBag;
-                e.preventDefault();
-            }
-        });
-        
-        window.addEventListener('keyup', (e) => {
-            this.keys[e.key.toLowerCase()] = false;
-        });
-        
-        this.canvas.addEventListener('mousemove', (e) => {
-            const rect = this.canvas.getBoundingClientRect();
-            this.mouse.x = e.clientX - rect.left;
-            this.mouse.y = e.clientY - rect.top;
-        });
-        
-        this.canvas.addEventListener('click', (e) => {
-            if (this.state !== GameState.PLAYING) return;
-            
-            this.mouse.clicked = true;
-            
-            // 工作台UI点击
-            if (this.activeWorkbench && this.activeWorkbench.isOpen) {
-                const result = this.activeWorkbench.handleClick(
-                    this.mouse.x, this.mouse.y, this.player.inventory
-                );
-                if (result) {
-                    this.ui.addNotification(`✅ 合成成功: ${result.name} x${result.amount}`);
-                    
-                    // 应用消耗品效果
-                    if (result.effect && result.effect.type === 'consumable') {
-                        switch (result.effect.value) {
-                            case 'health':
-                                this.player.health = Math.min(100, this.player.health + result.effect.amount);
-                                break;
-                            case 'hunger':
-                                this.player.hunger = Math.min(100, this.player.hunger + result.effect.amount);
-                                break;
-                            case 'thirst':
-                                this.player.thirst = Math.min(100, this.player.thirst + result.effect.amount);
-                                break;
-                        }
-                    }
-                    
-                    // 应用工具效果
-                    if (result.effect && result.effect.type === 'tool') {
-                        this.player.hasTool = result.effect.value;
-                    }
-                }
-                return;
-            }
-            
-            // 建造模式下点击扩建
-            if (this.buildMode && this.itemManager && this.player) {
-                if (this.placingWorkbench) {
-                    // 放置工作台
-                    if (this.player.inventory.plank >= 10 && this.player.inventory.metal >= 2) {
-                        this.player.removeFromInventory('plank', 10);
-                        this.player.removeFromInventory('metal', 2);
-                        this.raft.addWorkbench(this.mouse.x - 20, this.mouse.y - 20);
-                        this.ui.addNotification('✅ 工作台放置成功!');
-                        this.placingWorkbench = false;
-                    } else {
-                        this.ui.addNotification('❌ 材料不足! 需要: 木板x10 + 金属x2');
-                    }
-                    return;
-                }
-                
-                const hasPlank = this.player.inventory.plank > 0;
-                if (!hasPlank) {
-                    this.ui.addNotification('❌ 木板不足!');
-                    return;
-                }
-                
-                const expandable = this.raft.getExpandablePositions(
-                    this.player.x + this.player.width / 2,
-                    this.player.y + this.player.height / 2
-                );
-                
-                for (const pos of expandable) {
-                    const dist = Math.sqrt(
-                        (this.mouse.x - pos.x - CELL_SIZE / 2) ** 2 + 
-                        (this.mouse.y - pos.y - CELL_SIZE / 2) ** 2
-                    );
-                    if (dist < CELL_SIZE) {
-                        if (this.raft.expand(pos.direction)) {
-                            this.player.removeFromInventory('plank');
-                            this.ui.addNotification('✅ 木筏扩建成功!');
-                        }
-                        break;
-                    }
-                }
-            } else if (this.itemManager) {
-                this.itemManager.checkClick(this.mouse.x, this.mouse.y);
-            }
-        });
+  }
+
+  _click() {
+    const mx=this.mouse.x, my=this.mouse.y;
+
+    if (this.state==='playing') {
+      // 尝试拾取
+      const got = this.spawner.click(mx, my, this.player);
+      if (got==='chest') this.ui.toast('🎁 宝箱开出资源!');
+      else if (got) this.ui.toast(`+1 ${ITEMS[got]?.name||got}`);
     }
-    
-    handlePauseAction(action) {
-        switch (action) {
-            case 'resume':
-                this.pauseMenu.toggle();
-                this.state = GameState.PLAYING;
-                break;
-            case 'recipes':
-                // 打开工作台界面（如果有）
-                this.pauseMenu.toggle();
-                this.state = GameState.PLAYING;
-                this.ui.addNotification('📖 靠近工作台按E查看合成图纸');
-                break;
-            case 'controls':
-                this.pauseMenu.toggle();
-                this.state = GameState.PLAYING;
-                this.ui.addNotification('🎮 操作说明已显示在底部');
-                break;
-            case 'quit':
-                // 重新开始游戏
-                this.pauseMenu.toggle();
-                this.state = GameState.PLAYING;
-                this.start();
-                break;
-        }
+
+    if (this.state==='craft') {
+      const r = this.ui.handleCraftClick(mx, my, this.player, this.craftCat, this.craftOffset);
+      if (r?.action==='cat') { this.craftCat=r.value; this.craftOffset=0; }
+      if (r?.action==='craft') this.ui.toast(`✅ 合成 ${r.value.name}`);
     }
-    
-    start() {
-        this.raft = new Raft();
-        this.player = new Player(this.raft);
-        this.itemManager = new ItemManager();
-        this.fishing = new FishingSystem();
-        this.dayNight = new DayNightCycle();
-        this.ui = new UIManager();
-        this.missions = new MissionManager();
-        this.inventoryUI = new InventoryUI();
-        this.pauseMenu = new PauseMenu();
-        this.state = GameState.PLAYING;
-        this.lastTime = performance.now();
-        this.gameLoop();
+
+    if (this.state==='building') {
+      if (this.buildSub==='workbench') {
+        if (this.player.inv.plank>=10 && this.player.inv.metal>=2) {
+          this.player.inv.plank-=10; this.player.inv.metal-=2;
+          this.raft.addWorkbench(mx-20, my-20);
+          this.ui.toast('✅ 工作台放置成功');
+          this.buildSub=null;
+        } else { this.ui.toast('❌ 需要木板x10+金属x2'); }
+      }
+      if (this.buildSub==='raft') {
+        const slots = this.raft.expandSlots(this.player.x+12, this.player.y+16);
+        for (const s of slots) {
+          const cx = s.x+CELL/2, cy = s.y+CELL/2;
+          if (dist(mx,my,cx,cy) < CELL/2+10) {
+            const cost = this.player.inv.hammer>0 ? 1 : 1;
+            if (this.player.inv.plank >= cost) {
+              this.player.inv.plank -= cost;
+              this.raft.expand(s.dir);
+              this.ui.toast('✅ 扩建成功');
+            } else { this.ui.toast('❌ 木板不足'); }
+            break;
+          }
+        }
+      }
     }
-    
-    gameLoop() {
-        const currentTime = performance.now();
-        this.deltaTime = (currentTime - this.lastTime) / 1000;
-        this.lastTime = currentTime;
-        
-        // 只在游戏运行时更新
-        if (this.state === GameState.PLAYING) {
-            this.update();
-        }
-        
-        this.render();
-        
-        this.mouse.clicked = false;
-        requestAnimationFrame(() => this.gameLoop());
+  }
+
+  // ===== 主循环 =====
+  loop() {
+    const now = performance.now();
+    const dt = Math.min((now - (this._last||now)) / 1000, 0.05);
+    this._last = now;
+
+    if (this.state === 'playing') this._update(dt);
+    this._render();
+
+    this.mouse.clicked = false;
+    requestAnimationFrame(() => this.loop());
+  }
+
+  _update(dt) {
+    // 聚合输入
+    this._input.left  = this.keys['a']||this.keys['arrowleft']  ? 1:0;
+    this._input.right = this.keys['d']||this.keys['arrowright'] ? 1:0;
+    this._input.jump  = this.keys['w']||this.keys['arrowup']||this.keys[' '] ? 1:0;
+    this._input.fish  = this.keys['f'] ? 1:0;
+
+    this.player.update(dt, this._input);
+    this.fishing.update(dt, this._input, this.player);
+    this.spawner.update(dt, this.player);
+    this.dayNight.update(dt);
+    this.ui.update(dt);
+
+    // 钓鱼奖励
+    const r = this.fishing.getReward();
+    if (r) {
+      const mult = this.player.inv.spear>0 ? 2 : 1;
+      if (r.rarity==='rare') {
+        this.player.inv.metal += 2*mult;
+        this.ui.toast(`🎣 获得金属x${2*mult}!`);
+      } else if (r.rarity==='uncommon') {
+        this.player.inv.food += 2*mult;
+        this.ui.toast(`🎣 获得食物x${2*mult}!`);
+      } else {
+        this.player.inv.food += 1*mult;
+        this.ui.toast(`🎣 获得食物x${1*mult}`);
+      }
     }
-    
-    update() {
-        // 暂停时不更新
-        if (this.pauseMenu && this.pauseMenu.isPaused) return;
-        
-        // 只有在工作台和背包未打开时才更新玩家
-        if ((!this.activeWorkbench || !this.activeWorkbench.isOpen) && !this.showBag) {
-            this.player.update(this.deltaTime, this.keys);
-            
-            // 更新物品栏
-            this.inventoryUI.update(this.keys, this.player);
-            
-            // 检查是否使用了物品
-            if (this.keys['q']) {
-                const result = this.inventoryUI.useItem(this.player);
-                if (result && result.success) {
-                    this.ui.addNotification(result.message);
-                }
-                this.keys['q'] = false;
-            }
+  }
+
+  _render() {
+    const ctx = this.ctx;
+    this.dayNight.render(ctx);
+    this.raft.render(ctx);
+    this.spawner.render(ctx);
+    this.fishing.render(ctx, this.player);
+    this.player.render(ctx);
+
+    // 建造模式叠加
+    if (this.state === 'building') {
+      if (this.buildSub==='raft') {
+        const slots = this.raft.expandSlots(this.player.x+12, this.player.y+16);
+        for (const s of slots) {
+          ctx.fillStyle='rgba(46,204,113,0.45)';
+          ctx.fillRect(s.x, s.y, CELL, CELL);
+          ctx.strokeStyle='#2ecc71'; ctx.lineWidth=2;
+          ctx.strokeRect(s.x, s.y, CELL, CELL);
+          ctx.fillStyle='#fff'; ctx.font='18px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
+          const arrow = s.dir==='left'?'←':s.dir==='right'?'→':'↑';
+          ctx.fillText(arrow, s.x+CELL/2, s.y+CELL/2);
         }
-        
-        this.itemManager.update(this.deltaTime, this.canvas.width, this.canvas.height, this.player);
-        this.fishing.update(this.deltaTime, this.keys, this.player, this.canvas.width, this.canvas.height);
-        this.dayNight.update(this.deltaTime);
-        this.ui.update(this.deltaTime);
-        
-        // 更新任务
-        this.missions.setRaftSize(this.raft.width * this.raft.height);
-        const completedMission = this.missions.update(this.player, this.dayNight);
-        if (completedMission) {
-            this.ui.addNotification(`🎉 任务完成: ${completedMission.title}`);
-            if (completedMission.reward) {
-                this.player.addToInventory(
-                    completedMission.reward.type,
-                    completedMission.reward.count
-                );
-            }
-        }
-        
-        // 处理钓鱼收获
-        const catchResult = this.fishing.getCatch();
-        if (catchResult) {
-            if (catchResult.rarity === 'rare') {
-                this.player.addToInventory('metal', 2);
-                this.ui.addNotification('🎣 获得稀有金属 x2!');
-            } else {
-                this.player.addToInventory('food', 1);
-                this.ui.addNotification('🎣 获得食物 x1');
-                this.missions.completedCount.fish++;
-            }
-        }
+      }
+      if (this.buildSub==='workbench') {
+        ctx.fillStyle='rgba(46,204,113,0.5)';
+        ctx.fillRect(this.mouse.x-20, this.mouse.y-20, 40, 40);
+        ctx.strokeStyle='#2ecc71'; ctx.lineWidth=2;
+        ctx.strokeRect(this.mouse.x-20, this.mouse.y-20, 40, 40);
+        ctx.font='22px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('🔨', this.mouse.x, this.mouse.y);
+      }
     }
-    
-    render() {
-        // 背景
-        this.dayNight.render(this.ctx, this.canvas.width, this.canvas.height);
-        
-        // 木筏
-        this.raft.render(this.ctx);
-        
-        // 物品
-        this.itemManager.render(this.ctx);
-        
-        // 钓鱼
-        this.fishing.render(this.ctx, this.player);
-        
-        // 玩家
-        this.player.render(this.ctx);
-        
-        // 工作台放置提示
-        if (this.placingWorkbench) {
-            this.ctx.fillStyle = 'rgba(46, 204, 113, 0.5)';
-            this.ctx.fillRect(this.mouse.x - 20, this.mouse.y - 20, 40, 40);
-            this.ctx.strokeStyle = '#2ecc71';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(this.mouse.x - 20, this.mouse.y - 20, 40, 40);
-            this.ctx.fillStyle = '#fff';
-            this.ctx.font = '20px Arial';
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText('🔨', this.mouse.x, this.mouse.y + 7);
-        }
-        
-        // 工作台UI
-        if (this.activeWorkbench && this.activeWorkbench.isOpen) {
-            this.activeWorkbench.renderUI(
-                this.ctx, 
-                this.player.inventory, 
-                this.canvas.width, 
-                this.canvas.height
-            );
-        }
-        
-        // 背包UI
-        if (this.showBag) {
-            this.inventoryUI.renderBag(this.ctx, this.player, this.canvas.width, this.canvas.height);
-        }
-        
-        // 快捷栏（最上层）
-        this.inventoryUI.renderQuickSlots(this.ctx, this.player, this.canvas.width, this.canvas.height);
-        
-        // UI
-        this.ui.render(this.ctx, this.player, this.dayNight, this.canvas.width, this.canvas.height);
-        
-        // 暂停菜单（最最上层）
-        if (this.pauseMenu) {
-            this.pauseMenu.render(this.ctx, this.canvas.width, this.canvas.height);
-        }
-    }
+
+    // HUD（始终显示）
+    this.ui.renderHUD(ctx, this.player, this.dayNight);
+
+    // 浮层
+    if (this.state==='bag')    this.ui.renderBag(ctx, this.player);
+    if (this.state==='craft')  this.ui.renderCraft(ctx, this.player, this.craftCat, this.craftOffset);
+    if (this.state==='paused') this.ui.renderPause(ctx, this.pauseSel);
+  }
 }
